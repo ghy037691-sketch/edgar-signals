@@ -75,15 +75,46 @@ _FIN_TAGS = {
 }
 def _latest_fact(companyfacts, tag_candidates):
     units = companyfacts.get("facts", {}).get("us-gaap", {})
+    cands = []
+    unit_used = "USD"
     for tag in tag_candidates:
         if tag in units:
             for ukey, arr in units[tag].get("units", {}).items():
-                fy = [x for x in arr if x.get("form") in ("10-K","10-Q","20-F","40-F") and "val" in x]
-                if fy:
-                    fy.sort(key=lambda x: (x.get("end",""), x.get("filed","")))
-                    x = fy[-1]
-                    return {"value": x["val"], "as_of": x.get("end"), "form": x.get("form"), "unit": ukey}
-    return None
+                unit_used = ukey
+                for x in arr:
+                    if x.get("form") in ("10-K", "10-Q", "20-F", "40-F") and "val" in x:
+                        cands.append(x)
+    if not cands:
+        return None
+
+    def _days(x):
+        s, e = x.get("start"), x.get("end")
+        if s and e:
+            try:
+                return (datetime.fromisoformat(e).date() - datetime.fromisoformat(s).date()).days
+            except Exception:
+                return None
+        return None
+
+    def is_annual(x):
+        if x.get("form") in ("10-K", "20-F"):
+            d = _days(x)
+            return True if d is None else 300 <= d <= 400
+        return False
+
+    annual = [x for x in cands if is_annual(x)]
+    cands.sort(key=lambda x: (x.get("end", ""), x.get("filed", "")))
+    latest = cands[-1]
+    out = {
+        "value": latest["val"], "as_of": latest.get("end"), "form": latest.get("form"), "unit": unit_used,
+        "period": "annual (fiscal year)" if is_annual(latest) else ("quarterly / YTD (10-Q)" if latest.get("form") == "10-Q" else latest.get("form")),
+    }
+    if annual:
+        annual.sort(key=lambda x: (x.get("end", ""), x.get("filed", "")))
+        a = annual[-1]
+        out["annual_value"] = a["val"]
+        out["annual_fy_end"] = a.get("end")
+    return out
 
 def company_snapshot(symbol_or_cik):
     r = resolve(symbol_or_cik)
@@ -118,43 +149,60 @@ def company_snapshot(symbol_or_cik):
     return snap
 
 def _ftsearch(q=None, forms=None, start=None, end=None, limit=50):
-    params = {}
-    if q: params["q"] = q
-    if forms: params["forms"] = ",".join(forms) if isinstance(forms,(list,tuple)) else forms
-    if start or end:
-        params["dateRange"] = "custom"
-        if start: params["startdt"] = start
-        if end: params["enddt"] = end
-    url = "https://efts.sec.gov/LATEST/search-index?" + urllib.parse.urlencode(params)
-    d = _get(url)
+    """Full-text search. SEC returns max 100 hits/page; paginate using start=."""
     out = []
-    for h in d.get("hits",{}).get("hits",[])[:limit]:
-        src = h.get("_source", {})
-        _id = h.get("_id","")  # e.g. 0001234567-24-000001:edgar/data/123/d24.htm
-        acc = ""; cik = None; doc = ""
-        m = re.match(r"([0-9-]+):", _id)
-        if m: acc = m.group(1)
-        display = src.get("display_names") or []
-        cik_list = src.get("ciks") or []
-        if cik_list:
-            try: cik = int(cik_list[0])
-            except: pass
-        adsh = src.get("adsh") or acc
-        adsh_nodash = (adsh or "").replace("-","")
-        doc_url = ""
-        if cik and adsh_nodash:
-            doc_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik:010d}&type={','.join(forms) if forms else ''}"
-            doc_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{adsh_nodash}/"
-        out.append({
-            "company": display[0] if display else src.get("entity",""),
-            "cik": cik,
-            "form": (src.get("file_date") and ",".join(src.get("form",[])) if isinstance(src.get("form"),list) else src.get("form")) or (forms[0] if forms and len(forms)==1 else ""),
-            "filed": src.get("file_date") or src.get("fileDate"),
-            "accession": adsh,
-            "filing_index": doc_url,
-            "root": src.get("rootName"),
-        })
-    return out, d.get("hits",{}).get("total",{}).get("value")
+    total = None
+    offset = 0
+    page = 100
+    while len(out) < limit:
+        params = {}
+        if q: params["q"] = q
+        if forms: params["forms"] = ",".join(forms) if isinstance(forms, (list, tuple)) else forms
+        if start or end:
+            params["dateRange"] = "custom"
+            if start: params["startdt"] = start
+            if end: params["enddt"] = end
+        params["start"] = offset
+        d = _get("https://efts.sec.gov/LATEST/search-index?" + urllib.parse.urlencode(params))
+        hits = d.get("hits", {}).get("hits", [])
+        if total is None:
+            total = d.get("hits", {}).get("total", {}).get("value")
+        if not hits:
+            break
+        for h in hits:
+            src = h.get("_source", {})
+            disp = (src.get("display_names") or [""])[0]
+            # display_name like: "Loan Artificial Intelligence Corp.  (LAAI)  (CIK 000...)".
+            # SEC pads the company name from ticker/CIK with double spaces; ticker/CIK
+            # are also in dedicated fields. Take text before the double-space pad, then
+            # strip any residual trailing parenthetical.
+            company = re.split(r"\s{2,}", disp)[0]
+            company = re.sub(r"\s*\([A-Z0-9.,\- ]{1,16}$", "", company).strip()
+            ticker_m = re.search(r"\(([A-Z.]{1,6})\)\s*\(CIK", disp)
+            cik = None
+            cik_list = src.get("ciks") or []
+            if cik_list:
+                try: cik = int(cik_list[0])
+                except: pass
+            adsh = src.get("adsh") or ""
+            form_val = src.get("form")
+            if isinstance(form_val, list):
+                form_val = ",".join(form_val)
+            out.append({
+                "company": company or disp,
+                "ticker": ticker_m.group(1) if ticker_m else None,
+                "cik": cik,
+                "form": form_val or (forms[0] if forms and len(forms) == 1 else ""),
+                "filed": src.get("file_date") or src.get("fileDate"),
+                "accession": adsh,
+                "filing_index": (f"https://www.sec.gov/Archives/edgar/data/{cik}/{adsh.replace('-','')}/" if cik and adsh else ""),
+            })
+            if len(out) >= limit:
+                break
+        if len(hits) < page:
+            break
+        offset += page
+    return out, total
 
 def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
                   exclude_real_estate=True, industries=None, enrich=True, scan_cap=400):
@@ -236,6 +284,18 @@ def _looks_like_real_estate(name):
     return any(h in n for h in _RE_HINTS)
 
 
+def _fmt_phone(raw):
+    """Normalize US phone numbers to NPA-NXX-XXXX style; leave others as-is."""
+    if not raw:
+        return None
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+    return raw.strip()
+
+
 def _parse_formd(cik, accession):
     """Parse Form D primary_doc.xml for operating-company lead details."""
     import xml.etree.ElementTree as ET
@@ -298,7 +358,7 @@ def _parse_formd(cik, accession):
         "total_remaining_usd": num("totalRemaining"),
         "minimum_investment_usd": num("minimumInvestmentAccepted"),
         "revenue_range": leaf("revenueRange") or None,
-        "phone": leaf("issuerPhoneNumber"),
+        "phone": _fmt_phone(leaf("issuerPhoneNumber")),
         "street": leaf("street1"),
         "city": leaf("city"),
         "state": leaf("stateOrCountryDescription") or leaf("stateOrCountry"),
@@ -456,4 +516,4 @@ def filing_search(keyword, forms=None, days_back=365, limit=25):
     end=datetime.now(timezone.utc).date(); start=end-timedelta(days=days_back)
     hits,total=_ftsearch(q=keyword, forms=forms, start=start.isoformat(), end=end.isoformat(), limit=limit)
     return {"keyword":keyword,"forms":forms,"days_back":days_back,"matched_total":total,
-            "results":[{"company":h["company"],"cik":h["cik"],"form":h["form"],"filed":h["filed"],"filing_index":h["filing_index"]} for h in hits]}
+            "results":[{"company":h["company"],"ticker":h.get("ticker"),"cik":h["cik"],"form":h["form"],"filed":h["filed"],"filing_index":h["filing_index"]} for h in hits]}
