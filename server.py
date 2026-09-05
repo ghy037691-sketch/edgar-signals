@@ -31,7 +31,15 @@ def dispatch(inp):
     if action == "snapshot":
         return edgar.company_snapshot(inp.get("symbol") or inp.get("ticker") or inp.get("cik"))
     if action == "funding_leads":
-        return edgar.funding_leads(_i(inp, "days_back", 30), _i(inp, "limit", 50), inp.get("keyword"))
+        def _b(k, d=True):
+            v = inp.get(k)
+            return d if v is None else str(v).lower() in ("1", "true", "yes", "on")
+        inds = inp.get("industries")
+        if isinstance(inds, str):
+            inds = [x.strip() for x in inds.split(",") if x.strip()]
+        return edgar.funding_leads(_i(inp, "days_back", 30), _i(inp, "limit", 50),
+                                   inp.get("keyword"), exclude_funds=_b("exclude_funds"),
+                                   exclude_real_estate=_b("exclude_real_estate"), industries=inds)
     if action in ("insider_transactions", "insider", "form4"):
         return edgar.insider_transactions(inp.get("symbol") or inp.get("ticker") or inp.get("cik"),
                                           limit=_i(inp, "limit", 15))

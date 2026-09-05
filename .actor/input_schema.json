@@ -54,6 +54,27 @@
       "maximum": 500,
       "default": 50,
       "description": "Maximum number of results to return."
+    },
+    "industries": {
+      "title": "Sector filter (funding_leads)",
+      "type": "string",
+      "editor": "textfield",
+      "description": "Optional comma-separated Form D sectors to keep, e.g. 'Other Technology' or 'Health Care,Other Technology'. Leave blank for all operating companies.",
+      "default": ""
+    },
+    "exclude_funds": {
+      "title": "Exclude investment funds (funding_leads)",
+      "type": "boolean",
+      "editor": "checkbox",
+      "description": "Drop pooled investment funds / SPVs from results (recommended for B2B leads).",
+      "default": true
+    },
+    "exclude_real_estate": {
+      "title": "Exclude property SPVs (funding_leads)",
+      "type": "boolean",
+      "editor": "checkbox",
+      "description": "Drop real-estate / property-owning LLCs that are not operating companies.",
+      "default": true
     }
   },
   "required": [

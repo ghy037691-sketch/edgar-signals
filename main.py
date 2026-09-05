@@ -99,10 +99,16 @@ def run(inp):
     if action == "snapshot":
         out = edgar.company_snapshot(inp.get("symbol") or inp.get("ticker") or inp.get("cik"))
     elif action == "funding_leads":
+        inds = inp.get("industries")
+        if isinstance(inds, str):
+            inds = [x.strip() for x in inds.split(",") if x.strip()]
         out = edgar.funding_leads(
             days_back=int(inp.get("days_back", 30)),
             limit=int(inp.get("limit", 50)),
             keyword=inp.get("keyword"),
+            exclude_funds=bool(inp.get("exclude_funds", True)),
+            exclude_real_estate=bool(inp.get("exclude_real_estate", True)),
+            industries=inds,
         )
     elif action in ("insider_transactions", "insider", "form4"):
         out = edgar.insider_transactions(

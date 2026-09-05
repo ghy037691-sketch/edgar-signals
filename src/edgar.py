@@ -156,20 +156,155 @@ def _ftsearch(q=None, forms=None, start=None, end=None, limit=50):
         })
     return out, d.get("hits",{}).get("total",{}).get("value")
 
-def funding_leads(days_back=30, limit=50, keyword=None):
+def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
+                  exclude_real_estate=True, industries=None, enrich=True, scan_cap=400):
+    """Fresh Form D filings. enrich=True parses primary_doc.xml for amount, sector,
+    phone, address, executives. exclude_funds drops pooled investment funds;
+    exclude_real_estate drops property-owning SPVs; industries optionally filters to
+    Form D industry group(s) (e.g. ['Other Technology','Health Care'])."""
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days_back)
-    hits, total = _ftsearch(q=keyword, forms=["D"], start=start.isoformat(), end=end.isoformat(), limit=limit)
+    hits, total = _ftsearch(q=keyword, forms=["D"], start=start.isoformat(), end=end.isoformat(), limit=scan_cap)
     leads = []
+    seen_ciks = set()
+    scanned = 0
+    want = [i.lower() for i in (industries or [])]
     for h in hits:
-        leads.append({
-            "company": h["company"].split("(")[0].strip(),
-            "cik": h["cik"],
-            "form_d_filed": h["filed"],
-            "accession": h["accession"],
-            "filing_index": h["filing_index"],
-        })
-    return {"days_back": days_back, "matched_form_d_total": total, "returned": len(leads), "leads": leads}
+        scanned += 1
+        name = h["company"].split("(")[0].strip()
+        if h.get("cik") and h["cik"] in seen_ciks:
+            continue  # amendments / duplicate Form Ds for the same company
+        cik = h["cik"]; acc = h["accession"]
+        base = {
+            "company": name, "cik": cik, "form_d_filed": h["filed"],
+            "accession": acc, "filing_index": h["filing_index"],
+        }
+        if enrich and cik and acc:
+            try:
+                e = _parse_formd(cik, acc)
+                if e:
+                    base.update(e)
+            except Exception:
+                pass
+        is_fund = bool(base.get("is_pooled_fund")) or _looks_like_fund(name)
+        is_re = _looks_like_real_estate(name) or (base.get("revenue_range") == "Not Applicable" and "LLC" in name.upper() and _looks_like_real_estate(name))
+        ind = (base.get("industry") or "")
+        if exclude_funds and is_fund:
+            continue
+        if exclude_real_estate and is_re:
+            continue
+        if want and not any(w in ind.lower() for w in want):
+            continue
+        base["is_pooled_fund"] = bool(is_fund)
+        if cik:
+            seen_ciks.add(cik)
+        leads.append(base)
+        if len(leads) >= limit:
+            break
+        if scanned >= scan_cap:
+            break
+    return {"days_back": days_back, "matched_form_d_total": total, "scanned": scanned,
+            "returned": len(leads), "exclude_funds": exclude_funds,
+            "exclude_real_estate": exclude_real_estate, "industries_filter": industries or [],
+            "enriched": enrich, "leads": leads}
+
+
+_FUND_HINTS = (" FUND", "FUND ", "FUND-", "FUND,", "FUND LLC", "MASTER", "FEEDER",
+               " REIT", "SERIES OF", " A SERIES", "PROPERTIES", "REAL ESTATE",
+               "CAPITAL FUND", "HOLDINGS FUND")
+_RE_HINTS = ("VILLAS", "HIGHLANDS", "PROPERTIES", "REAL ESTATE", "APARTMENTS", "TOWNHOMES",
+             "LLC, A SERIES", "AVENUE", "GRATIOT", "MACOMB", "POINTE", "ESTATES",
+             "LAND", "DEVELOPMENT", "CONDOMINIUM", "RESIDENTIAL", "COMMUNITIES")
+
+
+def _looks_like_fund(name):
+    n = " " + name.upper() + " "
+    return any(h in n for h in _FUND_HINTS)
+
+
+def _looks_like_real_estate(name):
+    n = " " + name.upper() + " "
+    # only treat as real estate when there is a property/placename-like cue AND name
+    # does NOT clearly read like an operating company
+    op_cues = ("INC.", "INC ", "CORP", "CORPORATION", "TECH", "LABS", "CONSULTING",
+               "THERAPEUTICS", "BIOTECH", "SOFTWARE", "SYSTEMS", "HEALTH", "AI")
+    if any(c in n for c in op_cues):
+        return False
+    return any(h in n for h in _RE_HINTS)
+
+
+def _parse_formd(cik, accession):
+    """Parse Form D primary_doc.xml for operating-company lead details."""
+    import xml.etree.ElementTree as ET
+    nodash = str(accession).replace("-", "")
+    url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{nodash}/primary_doc.xml"
+    try:
+        root = ET.fromstring(_get(url, raw=True))
+    except Exception:
+        return None
+
+    def leaf(tag):
+        for el in root.iter():
+            if el.tag.split("}")[-1] == tag and len(list(el)) == 0 and (el.text or "").strip():
+                return el.text.strip()
+        return ""
+
+    def num(tag):
+        v = leaf(tag)
+        if not v:
+            return None
+        try:
+            return float(v.replace(",", ""))
+        except Exception:
+            return None
+
+    industry = leaf("industryGroupType")
+    fund_type = leaf("investmentFundType")
+    is_fund = (industry == "Pooled Investment Fund") or bool(fund_type)
+
+    # executives / related persons
+    execs = []
+    for el in root.iter():
+        if el.tag.split("}")[-1] == "relatedPerson":
+            fn = mn = ln = rel = ""
+            for c in el.iter():
+                t = c.tag.split("}")[-1]
+                if t == "firstName": fn = (c.text or "").strip()
+                elif t == "middleName": mn = (c.text or "").strip()
+                elif t == "lastName": ln = (c.text or "").strip()
+                elif t == "relatedPersonRelationship": rel = (c.text or "").strip()
+            full = " ".join(x for x in (fn, mn, ln) if x)
+            if full:
+                full = " ".join(full.replace("/", " ").split())
+                execs.append({"name": full, "relationship": rel})
+    # signature titles often capture officer roles
+    sig_name = " ".join((leaf("signatureName") or "").replace("/", " ").split())
+    sig_title = leaf("signatureTitle")
+    if sig_name and sig_title and not any(e["name"] == sig_name for e in execs):
+        execs.append({"name": sig_name, "relationship": sig_title})
+
+    return {
+        "entity_type": leaf("entityType"),
+        "jurisdiction": leaf("jurisdictionOfInc"),
+        "industry": industry,
+        "is_pooled_fund": is_fund,
+        "fund_type": fund_type or None,
+        "total_offering_usd": num("totalOfferingAmount") if leaf("totalOfferingAmount") not in ("Indefinite", "") else None,
+        "offering_indefinite": leaf("totalOfferingAmount") == "Indefinite",
+        "total_amount_sold_usd": num("totalAmountSold"),
+        "total_remaining_usd": num("totalRemaining"),
+        "minimum_investment_usd": num("minimumInvestmentAccepted"),
+        "revenue_range": leaf("revenueRange") or None,
+        "phone": leaf("issuerPhoneNumber"),
+        "street": leaf("street1"),
+        "city": leaf("city"),
+        "state": leaf("stateOrCountryDescription") or leaf("stateOrCountry"),
+        "zip": leaf("zipCode"),
+        "is_amendment": leaf("isAmendment") == "true",
+        "has_non_accredited_investors": leaf("hasNonAccreditedInvestors") == "true",
+        "executives": execs[:6],
+        "source_url": url,
+    }
 
 def _browse_form4(cik, count=20):
     """Use browse-edgar atom feed: returns owner-relationship Form 4s for an issuer CIK."""
