@@ -77,7 +77,10 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, dispatch({"action": "snapshot", "symbol": q.get("symbol")}))
             if u.path == "/funding_leads":
                 return self._send(200, dispatch({"action": "funding_leads", "days_back": q.get("days_back", 30),
-                                                 "limit": q.get("limit", 50), "keyword": q.get("keyword") or None}))
+                                                 "limit": q.get("limit", 50), "keyword": q.get("keyword") or None,
+                                                 "industries": q.get("industries") or "",
+                                                 "exclude_funds": q.get("exclude_funds", "true"),
+                                                 "exclude_real_estate": q.get("exclude_real_estate", "true")}))
             if u.path == "/insider":
                 return self._send(200, dispatch({"action": "insider", "symbol": q.get("symbol"),
                                                  "limit": q.get("limit", 15)}))
