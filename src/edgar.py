@@ -187,7 +187,10 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
             except Exception:
                 pass
         is_fund = bool(base.get("is_pooled_fund")) or _looks_like_fund(name)
-        is_re = _looks_like_real_estate(name) or (base.get("revenue_range") == "Not Applicable" and "LLC" in name.upper() and _looks_like_real_estate(name))
+        ind_low = (base.get("industry") or "").lower()
+        # Form D real-estate industry groups: Real Estate, Residential, Commercial, Lodging
+        re_sectors = ("real estate", "residential", "commercial", "lodging", "conventions", "investing")
+        is_re = _looks_like_real_estate(name) or any(s in ind_low for s in re_sectors)
         ind = (base.get("industry") or "")
         if exclude_funds and is_fund:
             continue
@@ -336,7 +339,29 @@ def insider_transactions(symbol_or_cik, limit=15):
         if parsed and parsed.get("transactions"):
             parsed["filed"]=e["filed"]
             txns.append(parsed)
-    return {"company":name,"ticker":ticker,"cik":cik,"insider_transactions":txns}
+    # aggregate only meaningful open-market activity
+    buy_sh=sell_sh=0; buy_val=sell_val=0.0; open_buy_filings=open_sell_filings=0
+    for t in txns:
+        fbuy=fsell=0
+        for tr in t.get("transactions",[]):
+            if not tr.get("open_market"): continue
+            if tr.get("code")=="P":
+                fbuy+=tr.get("shares") or 0; buy_val+=tr.get("approx_value_usd") or 0
+            elif tr.get("code")=="S":
+                fsell+=tr.get("shares") or 0; sell_val+=tr.get("approx_value_usd") or 0
+        buy_sh+=fbuy; sell_sh+=fsell
+        if fbuy>0: open_buy_filings+=1
+        if fsell>0: open_sell_filings+=1
+    summary={
+        "open_market_purchase_shares":int(buy_sh),"open_market_sale_shares":int(sell_sh),
+        "open_market_purchase_usd":round(buy_val),"open_market_sale_usd":round(sell_val),
+        "purchase_filings":open_buy_filings,"sale_filings":open_sell_filings,
+        "net_signal":("net insider BUYING" if buy_val>sell_val and buy_val>0
+                      else "net insider SELLING" if sell_val>buy_val and sell_val>0
+                      else "no open-market signal / mostly scheduled or non-market trades"),
+    }
+    return {"company":name,"ticker":ticker,"cik":cik,"summary":summary,
+            "insider_transactions":txns}
 
 def _parse_form4_index(index_url):
     """Given a filing index page, find the Form 4 primary instance .xml (wk-form4*) and parse it."""
@@ -400,11 +425,23 @@ def _parse_form4(url):
             code=g("transactionCode"); shares=g("transactionShares"); price=g("transactionPricePerShare")
             ad=g("transactionAcquiredDisposedCode"); sec=g("securityTitle"); fdate=g("transactionDate")
             if not shares: continue
-            side="BUY" if ad=="A" else ("SELL" if ad=="D" else ad)
-            kind={"A":"award/grant","P":"open-market BUY","S":"open-market SELL","D":"disposition to issuer","G":"gift","M":"option exercise","F":"tax withholding","J":"other","V":"voluntary"}.get(code,code)
+            # Only open-market purchases (P) and sales (S) are investable signals.
+            # Gifts (G), tax withholding (F), option exercises (M), awards (A) are NOT
+            # insider buy/sell signals and must not be labelled as bullish/bearish.
+            open_market = code in ("P", "S")
+            if open_market:
+                signal = "BULLISH (insider buying)" if code == "P" else "BEARISH (insider selling)"
+                side = "BUY" if code == "P" else "SELL"
+            else:
+                signal = "neutral (not open-market)"
+                side = "BUY" if ad == "A" else ("SELL" if ad == "D" else ad)
+            kind={"A":"award/grant","P":"open-market purchase","S":"open-market sale","D":"disposition to issuer",
+                  "G":"gift (bona-fide, $0)","M":"option exercise","F":"tax withholding","J":"other","V":"voluntary",
+                  "W":"warrant/right","U":"tender/exchange","X":"option exercise (stock)","C":"conversion"}.get(code, code)
             try: val=float(shares)*(float(price) if price else 0)
             except: val=None
             out.append({"date":fdate,"security":sec,"code":code,"type":kind,"side":side,
+                        "open_market":open_market,"signal":signal,
                         "shares":_num(shares),"price_per_share":_num(price),
                         "approx_value_usd":round(val) if val is not None else None})
         return {"insider":rpt,"roles":roles,"transactions":out,"source_url":url}

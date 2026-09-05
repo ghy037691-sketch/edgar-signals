@@ -3,7 +3,7 @@
   "name": "edgar-signals",
   "title": "SEC EDGAR Signals — Funding Leads, Insider Trades, Filing Intel",
   "description": "Structured signals from SEC EDGAR: newest Form D funding filings (freshly-funded companies = B2B leads), Form 4 insider buys/sells by directors and officers, company snapshots with latest financials, and full-text filing search. Free public source, no API key.",
-  "version": "0.5",
+  "version": "0.6",
   "input": "./input_schema.json",
   "dockerfile": "../Dockerfile"
 }
