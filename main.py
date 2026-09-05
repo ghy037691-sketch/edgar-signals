@@ -11,17 +11,54 @@ Input is read from, in order: Apify env (INPUT_JSON/APIFY_INPUT), a local file g
 or command-line JSON. Results are pushed to the Apify dataset when APIFY_TOKEN is present, and
 always printed to stdout.
 """
-import sys, os, json, urllib.request
+import sys, os, json, glob, urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 import edgar  # noqa: E402
+
+
+def _read_apify_input():
+    """Read input on the Apify platform WITHOUT the SDK, trying every convention:
+    1) mounted input file (env-pinned path), 2) well-known local /data paths,
+    3) default Key-Value Store over the API. Returns dict or None."""
+    # 1) env-pinned file paths (different Apify build conventions)
+    for env in ("APIFY_INPUT_PATH", "ACTOR_INPUT_PATH", "APIFY_ACTOR_INPUT_PATH"):
+        p = os.environ.get(env)
+        if p and os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                return json.load(f)
+    # 2) well-known mounted locations inside the Apify container
+    candidates = []
+    candidates += glob.glob("/data/key-value-stores/*/INPUT*.json")
+    candidates += glob.glob("/data/key-value-stores/*/INPUT")
+    candidates += glob.glob("/data/inputs/**/input.json", recursive=True)
+    for p in candidates:
+        try:
+            with open(p, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            continue
+    # 3) default Key-Value Store via API (record key = INPUT)
+    token = os.environ.get("APIFY_TOKEN")
+    kvs = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID")
+    if token and kvs:
+        url = f"https://api.apify.com/v2/key-value-stores/{kvs}/records/INPUT?token={token}"
+        try:
+            with urllib.request.urlopen(url, timeout=20) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception:
+            return None
+    return None
 
 
 def read_input():
     raw = os.environ.get("APIFY_INPUT_JSON") or os.environ.get("INPUT_JSON")
     if raw:
         return json.loads(raw)
-    src = os.environ.get("APIFY_INPUT_SOURCE") or os.environ.get("INPUT_PATH")
+    ap = _read_apify_input()
+    if ap is not None:
+        return ap
+    src = os.environ.get("INPUT_PATH")
     if src and os.path.exists(src):
         return json.load(open(src, encoding="utf-8"))
     if len(sys.argv) > 1:
@@ -38,16 +75,17 @@ def read_input():
 def push_to_dataset(items):
     """Push items to the Apify default dataset; no-op locally."""
     token = os.environ.get("APIFY_TOKEN")
-    if not token:
-        return False
+    ds = os.environ.get("APIFY_DEFAULT_DATASET_ID")
     run_id = os.environ.get("APIFY_ACTOR_RUN_ID") or os.environ.get("ACTOR_RUN_ID")
-    if not run_id:
+    if not token or not (ds or run_id):
         return False
     if isinstance(items, dict):
         items = [items]
-    url = f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items?token={token}"
+    base = (f"https://api.apify.com/v2/datasets/{ds}/items?token={token}" if ds
+            else f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items?token={token}")
     data = json.dumps(items).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(base, data=data,
+                                 headers={"Content-Type": "application/json"})
     try:
         urllib.request.urlopen(req, timeout=30)
         return True
