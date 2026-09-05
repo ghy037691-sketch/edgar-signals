@@ -6,44 +6,57 @@
     "action": {
       "title": "Action",
       "type": "string",
-      "enum": ["snapshot", "funding_leads", "insider_transactions", "filing_search"],
+      "enum": [
+        "snapshot",
+        "funding_leads",
+        "insider_transactions",
+        "filing_search"
+      ],
       "default": "funding_leads",
       "editor": "select",
-      "description": "funding_leads = newest Form D filings (sales leads: companies that just raised); insider_transactions = Form 4 director/officer buys & sells; snapshot = company profile + financials + recent filings; filing_search = full-text search across filings."
+      "description": "funding_leads = newest Form D filings (companies that just raised = sales leads); insider_transactions = Form 4 director/officer buys and sells; snapshot = company profile + financials + recent filings; filing_search = full-text search across filings."
     },
     "symbol": {
-      "title": "Ticker or CIK (for snapshot / insider)",
+      "title": "Ticker or CIK (snapshot / insider)",
       "type": "string",
+      "editor": "textfield",
       "description": "e.g. NVDA, AAPL, TSLA, or a 10-digit CIK",
       "prefill": "NVDA"
     },
     "keyword": {
       "title": "Keyword (filing_search / optional Form D filter)",
       "type": "string",
-      "description": "e.g. 'cybersecurity', 'artificial intelligence', 'bankruptcy'",
+      "editor": "textfield",
+      "description": "e.g. cybersecurity, artificial intelligence, bankruptcy",
       "prefill": "artificial intelligence"
     },
     "forms": {
       "title": "Filing forms (filing_search)",
-      "type": "array",
-      "items": {"type": "string"},
-      "description": "e.g. ['10-K'], ['10-Q'], ['8-K']",
-      "default": ["10-K"]
+      "type": "string",
+      "editor": "textfield",
+      "description": "Comma-separated form types, e.g. 10-K or 10-K,8-K or 8-K",
+      "default": "10-K"
     },
     "days_back": {
       "title": "Days back",
       "type": "integer",
+      "editor": "number",
       "minimum": 1,
       "maximum": 3650,
-      "default": 30
+      "default": 30,
+      "description": "How many days back to search (filings / funding window)."
     },
     "limit": {
       "title": "Max results",
       "type": "integer",
+      "editor": "number",
       "minimum": 1,
       "maximum": 500,
-      "default": 50
+      "default": 50,
+      "description": "Maximum number of results to return."
     }
   },
-  "required": ["action"]
+  "required": [
+    "action"
+  ]
 }

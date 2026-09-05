@@ -112,7 +112,7 @@ def run(inp):
     elif action in ("filing_search", "search"):
         forms = inp.get("forms")
         if isinstance(forms, str):
-            forms = [forms]
+            forms = [f.strip() for f in forms.split(",") if f.strip()]
         out = edgar.filing_search(
             inp.get("keyword") or inp.get("query") or "",
             forms=forms,

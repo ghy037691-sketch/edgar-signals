@@ -1,23 +1,9 @@
 {
   "actorSpecification": 1,
   "name": "edgar-signals",
-  "title": "SEC EDGAR Signals — Funding Leads, Insider Trades, Filing Intelligence",
-  "description": "Structured, agent-ready signals from SEC EDGAR: newest Form D funding filings (companies that just raised = B2B sales leads), Form 4 insider buy/sell transactions by directors & officers, company snapshots with latest financials, and full-text filing search. Free public source, no API key, stable official APIs.",
-  "version": "1.0.0",
+  "title": "SEC EDGAR Signals — Funding Leads, Insider Trades, Filing Intel",
+  "description": "Structured signals from SEC EDGAR: newest Form D funding filings (freshly-funded companies = B2B leads), Form 4 insider buys/sells by directors and officers, company snapshots with latest financials, and full-text filing search. Free public source, no API key.",
+  "version": "0.4",
   "input": "./input_schema.json",
-  "dockerfile": "../Dockerfile",
-  "storages": {
-    "dataset": {
-      "actorSpecification": 1,
-      "title": "Signals",
-      "views": {
-        "leads": {
-          "title": "Funding leads",
-          "transformation": {"flatten": ["lead"]},
-          "display": {"title": "company", "image": null},
-          "tableView": {"columns": ["company", "cik", "form_d_filed", "accession", "filing_index"]}
-        }
-      }
-    }
-  }
+  "dockerfile": "../Dockerfile"
 }

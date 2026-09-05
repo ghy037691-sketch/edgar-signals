@@ -38,7 +38,7 @@ def dispatch(inp):
     if action in ("filing_search", "search"):
         forms = inp.get("forms")
         if isinstance(forms, str):
-            forms = [forms] if forms else None
+            forms = [f.strip() for f in forms.split(",") if f.strip()] or None
         return edgar.filing_search(inp.get("keyword") or inp.get("query") or "",
                                    forms=forms, days_back=_i(inp, "days_back", 365),
                                    limit=_i(inp, "limit", 25))
