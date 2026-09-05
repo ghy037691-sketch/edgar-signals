@@ -9,32 +9,34 @@ BASE = "https://data.sec.gov"
 _last = [0.0]
 _lock = threading.Lock()
 
-def _get(url, raw=False):
-    # throttle to ~8 req/s
-    gap = time.time() - _last[0]
-    if gap < 0.12:
-        time.sleep(0.12 - gap)
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Encoding": "gzip, deflate", "Host": url.split('/')[2]})
-    import gzip
+def _throttle():
+    """Rate-limit request STARTS to ~8/s. Lock held only for the short check/update,
+    never across the network call — otherwise worker threads can't fetch concurrently."""
     with _lock:
         gap = time.time() - _last[0]
         if gap < 0.12:
             time.sleep(0.12 - gap)
-        last_err = None
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(req, timeout=30) as r:
-                    data = r.read()
-                    if r.headers.get("Content-Encoding") == "gzip":
-                        data = gzip.decompress(data)
-                _last[0] = time.time()
-                return data if raw else json.loads(data)
-            except urllib.error.HTTPError as e:
-                last_err = e
-                if e.code in (429, 500, 502, 503, 504):
-                    time.sleep(0.6 * (attempt + 1)); continue
-                raise
-        raise last_err
+        _last[0] = time.time()
+
+
+def _get(url, raw=False):
+    import gzip
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Encoding": "gzip, deflate", "Host": url.split('/')[2]})
+    last_err = None
+    for attempt in range(3):
+        _throttle()  # space out request starts; release lock before awaiting the network
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                data = r.read()
+                if r.headers.get("Content-Encoding") == "gzip":
+                    data = gzip.decompress(data)
+            return data if raw else json.loads(data)
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code in (429, 500, 502, 503, 504):
+                time.sleep(0.6 * (attempt + 1)); continue
+            raise
+    raise last_err
 
 def _cik(c):
     c = str(c).strip()
@@ -213,8 +215,9 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days_back)
     hits, total = _ftsearch(q=keyword, forms=["D"], start=start.isoformat(), end=end.isoformat(), limit=scan_cap)
-    # Enrich Form D primary docs concurrently (the shared _get throttle/lock keeps us
-    # within SEC fair-access limits); then filter sequentially.
+    # Enrich Form D primary docs concurrently and STOP as soon as we have `limit`
+    # qualifying leads (no point enriching all scan_cap when far fewer are needed).
+    # Process in order-preserving chunks so output stays in feed (date) order.
     from concurrent.futures import ThreadPoolExecutor
 
     def _enrich(h):
@@ -227,25 +230,21 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
                 e = None
         return h, e
 
-    enriched = []
-    workers = 8 if enrich else 1
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        for h, e in ex.map(_enrich, hits):
-            enriched.append((h, e))
-
     leads = []
     seen_ciks = set()
     scanned = 0
     want = [i.lower() for i in (industries or [])]
-    for h, e in enriched:
+
+    def _accept(h, e):
+        nonlocal scanned
         scanned += 1
         name = h["company"].split("(")[0].strip()
         if h.get("cik") and h["cik"] in seen_ciks:
-            continue  # amendments / duplicate Form Ds for the same company
-        cik = h["cik"]; acc = h["accession"]
+            return
+        cik = h["cik"]
         base = {
             "company": name, "cik": cik, "form_d_filed": h["filed"],
-            "accession": acc, "filing_index": h["filing_index"],
+            "accession": h["accession"], "filing_index": h["filing_index"],
         }
         if e:
             base.update(e)
@@ -256,19 +255,24 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
         is_re = _looks_like_real_estate(name) or any(s in ind_low for s in re_sectors)
         ind = (base.get("industry") or "")
         if exclude_funds and is_fund:
-            continue
+            return
         if exclude_real_estate and is_re:
-            continue
+            return
         if want and not any(w in ind.lower() for w in want):
-            continue
+            return
         base["is_pooled_fund"] = bool(is_fund)
         if cik:
             seen_ciks.add(cik)
         leads.append(base)
-        if len(leads) >= limit:
-            break
-        if scanned >= scan_cap:
-            break
+
+    chunk = 12
+    with ThreadPoolExecutor(max_workers=8 if enrich else 1) as ex:
+        for i in range(0, len(hits), chunk):
+            batch = hits[i:i + chunk]
+            for h, e in ex.map(_enrich, batch):
+                _accept(h, e)
+            if len(leads) >= limit or scanned >= scan_cap:
+                break
     return {"days_back": days_back, "matched_form_d_total": total, "scanned": scanned,
             "returned": len(leads), "exclude_funds": exclude_funds,
             "exclude_real_estate": exclude_real_estate, "industries_filter": industries or [],
