@@ -213,11 +213,31 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
     end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days_back)
     hits, total = _ftsearch(q=keyword, forms=["D"], start=start.isoformat(), end=end.isoformat(), limit=scan_cap)
+    # Enrich Form D primary docs concurrently (the shared _get throttle/lock keeps us
+    # within SEC fair-access limits); then filter sequentially.
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _enrich(h):
+        cik, acc = h.get("cik"), h.get("accession")
+        e = None
+        if enrich and cik and acc:
+            try:
+                e = _parse_formd(cik, acc)
+            except Exception:
+                e = None
+        return h, e
+
+    enriched = []
+    workers = 8 if enrich else 1
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for h, e in ex.map(_enrich, hits):
+            enriched.append((h, e))
+
     leads = []
     seen_ciks = set()
     scanned = 0
     want = [i.lower() for i in (industries or [])]
-    for h in hits:
+    for h, e in enriched:
         scanned += 1
         name = h["company"].split("(")[0].strip()
         if h.get("cik") and h["cik"] in seen_ciks:
@@ -227,13 +247,8 @@ def funding_leads(days_back=30, limit=50, keyword=None, exclude_funds=True,
             "company": name, "cik": cik, "form_d_filed": h["filed"],
             "accession": acc, "filing_index": h["filing_index"],
         }
-        if enrich and cik and acc:
-            try:
-                e = _parse_formd(cik, acc)
-                if e:
-                    base.update(e)
-            except Exception:
-                pass
+        if e:
+            base.update(e)
         is_fund = bool(base.get("is_pooled_fund")) or _looks_like_fund(name)
         ind_low = (base.get("industry") or "").lower()
         # Form D real-estate industry groups: Real Estate, Residential, Commercial, Lodging
