@@ -1,51 +1,93 @@
-"""
-SEC EDGAR Signals — Apify actor (zero third-party dependencies; Python stdlib only).
+"""SEC EDGAR Signals — Apify Actor entry point (Python standard library only).
 
-Actions (set via input `action`):
-  - snapshot            -> one public company's profile + latest financials + recent filings
-  - funding_leads       -> newest Form D filings (freshly funded / raising companies = sales leads)
-  - insider_transactions-> Form 4 insider buys/sells for a company (directors/officers/10% owners)
-  - filing_search       -> full-text search across filings (e.g. 'cybersecurity' in 10-K)
+One run performs one of four actions:
+  funding_leads, insider_transactions, snapshot, or filing_search.
 
-Input is read from, in order: Apify env (INPUT_JSON/APIFY_INPUT), a local file given as argv[1],
-or command-line JSON. Results are pushed to the Apify dataset when APIFY_TOKEN is present, and
-always printed to stdout.
+The Actor writes customer-visible records to the default dataset and writes the
+complete run result to the default key-value store under OUTPUT. For fair PPE
+billing, errors and zero-result funding runs never create a paid dataset item.
 """
-import sys, os, json, glob, urllib.request
+from datetime import datetime, timezone
+import glob
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 import edgar  # noqa: E402
 
+ACTOR_VERSION = "1.0"
+CANONICAL_ACTIONS = (
+    "funding_leads", "insider_transactions", "snapshot", "filing_search",
+)
+ACTION_ALIASES = {
+    "funding_leads": "funding_leads",
+    "insider_transactions": "insider_transactions",
+    "insider": "insider_transactions",
+    "form4": "insider_transactions",
+    "snapshot": "snapshot",
+    "filing_search": "filing_search",
+    "search": "filing_search",
+}
+
+
+def _api_base():
+    return os.environ.get("APIFY_API_BASE_URL", "https://api.apify.com").rstrip("/")
+
+
+def _apify_request(url, data=None, method=None, content_type="application/json", timeout=45):
+    """Authenticated Apify request with bounded retries for transient failures."""
+    token = os.environ.get("APIFY_TOKEN")
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if data is not None:
+        headers["Content-Type"] = content_type
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    last_error = None
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as error:
+            last_error = error
+            if error.code == 429 or 500 <= error.code < 600:
+                time.sleep(0.75 * (attempt + 1))
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError) as error:
+            last_error = error
+            time.sleep(0.75 * (attempt + 1))
+    raise last_error
+
 
 def _read_apify_input():
-    """Read input on the Apify platform WITHOUT the SDK, trying every convention:
-    1) mounted input file (env-pinned path), 2) well-known local /data paths,
-    3) default Key-Value Store over the API. Returns dict or None."""
-    # 1) env-pinned file paths (different Apify build conventions)
-    for env in ("APIFY_INPUT_PATH", "ACTOR_INPUT_PATH", "APIFY_ACTOR_INPUT_PATH"):
-        p = os.environ.get(env)
-        if p and os.path.exists(p):
-            with open(p, encoding="utf-8") as f:
-                return json.load(f)
-    # 2) well-known mounted locations inside the Apify container
+    """Read input across current and legacy Apify container conventions."""
+    for env_name in ("APIFY_INPUT_PATH", "ACTOR_INPUT_PATH", "APIFY_ACTOR_INPUT_PATH"):
+        path = os.environ.get(env_name)
+        if path and os.path.exists(path):
+            with open(path, encoding="utf-8") as file:
+                return json.load(file)
+
     candidates = []
     candidates += glob.glob("/data/key-value-stores/*/INPUT*.json")
     candidates += glob.glob("/data/key-value-stores/*/INPUT")
     candidates += glob.glob("/data/inputs/**/input.json", recursive=True)
-    for p in candidates:
+    for path in candidates:
         try:
-            with open(p, encoding="utf-8") as f:
-                return json.load(f)
+            with open(path, encoding="utf-8") as file:
+                return json.load(file)
         except Exception:
             continue
-    # 3) default Key-Value Store via API (record key = INPUT)
-    token = os.environ.get("APIFY_TOKEN")
-    kvs = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID")
-    if token and kvs:
-        url = f"https://api.apify.com/v2/key-value-stores/{kvs}/records/INPUT?token={token}"
+
+    store_id = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID")
+    if os.environ.get("APIFY_TOKEN") and store_id:
+        url = f"{_api_base()}/v2/key-value-stores/{store_id}/records/INPUT"
         try:
-            with urllib.request.urlopen(url, timeout=20) as r:
-                return json.loads(r.read().decode("utf-8"))
+            return json.loads(_apify_request(url, timeout=20).decode("utf-8"))
         except Exception:
             return None
     return None
@@ -55,93 +97,217 @@ def read_input():
     raw = os.environ.get("APIFY_INPUT_JSON") or os.environ.get("INPUT_JSON")
     if raw:
         return json.loads(raw)
-    ap = _read_apify_input()
-    if ap is not None:
-        return ap
-    src = os.environ.get("INPUT_PATH")
-    if src and os.path.exists(src):
-        return json.load(open(src, encoding="utf-8"))
+    platform_input = _read_apify_input()
+    if platform_input is not None:
+        return platform_input
+    path = os.environ.get("INPUT_PATH")
+    if path and os.path.exists(path):
+        with open(path, encoding="utf-8") as file:
+            return json.load(file)
     if len(sys.argv) > 1:
-        p = sys.argv[1]
-        if os.path.exists(p):
-            return json.load(open(p, encoding="utf-8"))
-        return json.loads(p)
+        value = sys.argv[1]
+        if os.path.exists(value):
+            with open(value, encoding="utf-8") as file:
+                return json.load(file)
+        return json.loads(value)
     try:
         return json.loads(sys.stdin.read() or "{}")
     except Exception:
         return {}
 
 
-def push_to_dataset(items):
-    """Push items to the Apify default dataset; no-op locally."""
-    token = os.environ.get("APIFY_TOKEN")
-    ds = os.environ.get("APIFY_DEFAULT_DATASET_ID")
-    run_id = os.environ.get("APIFY_ACTOR_RUN_ID") or os.environ.get("ACTOR_RUN_ID")
-    if not token or not (ds or run_id):
-        return False
-    if isinstance(items, dict):
-        items = [items]
-    base = (f"https://api.apify.com/v2/datasets/{ds}/items?token={token}" if ds
-            else f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items?token={token}")
-    data = json.dumps(items).encode("utf-8")
-    req = urllib.request.Request(base, data=data,
-                                 headers={"Content-Type": "application/json"})
+def _integer(value, default, minimum, maximum):
     try:
-        urllib.request.urlopen(req, timeout=30)
-        return True
-    except Exception as e:
-        print(f"[warn] dataset push failed: {e}", file=sys.stderr)
-        return False
+        return max(minimum, min(int(value), maximum))
+    except (TypeError, ValueError):
+        return default
+
+
+def _number(value, default=0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _boolean(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def _error(message, action=None):
+    return {
+        "error": message,
+        "allowed_actions": list(CANONICAL_ACTIONS),
+        "_meta": {
+            "actor": "edgar-signals",
+            "version": ACTOR_VERSION,
+            "action": action,
+            "status": "failed",
+            "source": "SEC EDGAR (official public filings)",
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
 
 
 def run(inp):
-    action = (inp.get("action") or "snapshot").lower()
-    if action == "snapshot":
-        out = edgar.company_snapshot(inp.get("symbol") or inp.get("ticker") or inp.get("cik"))
-    elif action == "funding_leads":
-        inds = inp.get("industries")
-        if isinstance(inds, str):
-            inds = [x.strip() for x in inds.split(",") if x.strip()]
-        out = edgar.funding_leads(
-            days_back=int(inp.get("days_back", 30)),
-            limit=int(inp.get("limit", 50)),
-            keyword=inp.get("keyword"),
-            exclude_funds=bool(inp.get("exclude_funds", True)),
-            exclude_real_estate=bool(inp.get("exclude_real_estate", True)),
-            industries=inds,
+    """Validate input, call the selected action, and attach provenance metadata."""
+    if not isinstance(inp, dict):
+        return _error("Input must be a JSON object")
+    raw_action = str(inp.get("action") or "funding_leads").strip().lower()
+    action = ACTION_ALIASES.get(raw_action)
+    if not action:
+        return _error(f"Unknown action '{raw_action}'", raw_action)
+
+    days_back = _integer(inp.get("days_back"), 30, 1, 3650)
+    limit = _integer(inp.get("limit"), 50, 1, 500)
+
+    if action == "funding_leads":
+        result = edgar.funding_leads(
+            days_back=days_back,
+            limit=limit,
+            keyword=(str(inp.get("keyword") or "").strip() or None),
+            exclude_funds=_boolean(inp.get("exclude_funds"), True),
+            exclude_real_estate=_boolean(inp.get("exclude_real_estate"), True),
+            industries=_list(inp.get("industries")),
+            states=_list(inp.get("states")),
+            min_amount_raised_usd=max(0, _number(inp.get("min_amount_raised_usd"))),
+            max_amount_raised_usd=max(0, _number(inp.get("max_amount_raised_usd"))),
+            only_with_phone=_boolean(inp.get("only_with_phone"), False),
+            only_with_executives=_boolean(inp.get("only_with_executives"), False),
+            include_amendments=_boolean(inp.get("include_amendments"), False),
         )
-    elif action in ("insider_transactions", "insider", "form4"):
-        out = edgar.insider_transactions(
-            inp.get("symbol") or inp.get("ticker") or inp.get("cik"),
-            limit=int(inp.get("limit", 15)),
-        )
-    elif action in ("filing_search", "search"):
-        forms = inp.get("forms")
-        if isinstance(forms, str):
-            forms = [f.strip() for f in forms.split(",") if f.strip()]
-        out = edgar.filing_search(
-            inp.get("keyword") or inp.get("query") or "",
-            forms=forms,
-            days_back=int(inp.get("days_back", 365)),
-            limit=int(inp.get("limit", 25)),
-        )
+    elif action in ("snapshot", "insider_transactions"):
+        symbol = inp.get("symbol") or inp.get("ticker") or inp.get("cik")
+        if symbol is None or not str(symbol).strip():
+            return _error(f"'{action}' requires symbol (ticker or CIK)", action)
+        if action == "snapshot":
+            result = edgar.company_snapshot(symbol)
+        else:
+            result = edgar.insider_transactions(symbol, limit=limit)
     else:
-        out = {"error": f"unknown action '{action}'",
-               "allowed": ["snapshot", "funding_leads", "insider_transactions", "filing_search"]}
-    out["_meta"] = {"actor": "edgar-signals", "action": action, "source": "SEC EDGAR (public, free)"}
-    return out
+        keyword = str(inp.get("keyword") or inp.get("query") or "").strip()
+        if not keyword:
+            return _error("'filing_search' requires a non-empty keyword", action)
+        result = edgar.filing_search(
+            keyword,
+            forms=_list(inp.get("forms")) or None,
+            days_back=days_back,
+            limit=limit,
+        )
+
+    if result.get("error"):
+        result["_meta"] = _error(result["error"], action)["_meta"]
+        return result
+    result["_meta"] = {
+        "actor": "edgar-signals",
+        "version": ACTOR_VERSION,
+        "action": action,
+        "status": "succeeded",
+        "source": "SEC EDGAR (official public filings)",
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return result
+
+
+def push_to_dataset(items):
+    """Push result rows in bounded chunks; return the number written.
+
+    An empty list deliberately produces zero writes (and therefore zero synthetic
+    dataset-item charges under pay-per-event pricing).
+    """
+    if isinstance(items, dict):
+        items = [items]
+    items = list(items or [])
+    if not items:
+        return 0
+
+    token = os.environ.get("APIFY_TOKEN")
+    dataset_id = os.environ.get("APIFY_DEFAULT_DATASET_ID")
+    run_id = os.environ.get("APIFY_ACTOR_RUN_ID") or os.environ.get("ACTOR_RUN_ID")
+    if not token or not (dataset_id or run_id):
+        return 0  # local execution
+
+    url = (
+        f"{_api_base()}/v2/datasets/{dataset_id}/items"
+        if dataset_id else f"{_api_base()}/v2/actor-runs/{run_id}/dataset/items"
+    )
+    written = 0
+    for offset in range(0, len(items), 100):
+        chunk = items[offset:offset + 100]
+        payload = json.dumps(chunk, separators=(",", ":"), default=str).encode("utf-8")
+        _apify_request(url, data=payload, method="POST", timeout=60)
+        written += len(chunk)
+    return written
+
+
+def save_output(result):
+    """Save the complete result as the conventional OUTPUT KVS record."""
+    token = os.environ.get("APIFY_TOKEN")
+    store_id = os.environ.get("APIFY_DEFAULT_KEY_VALUE_STORE_ID")
+    if not token or not store_id:
+        return False
+    url = f"{_api_base()}/v2/key-value-stores/{store_id}/records/OUTPUT"
+    payload = json.dumps(result, separators=(",", ":"), default=str).encode("utf-8")
+    _apify_request(url, data=payload, method="PUT", timeout=45)
+    return True
+
+
+def _dataset_items(result):
+    action = result.get("_meta", {}).get("action")
+    if action == "funding_leads":
+        retrieved_at = result["_meta"]["retrieved_at"]
+        return [
+            dict(
+                lead,
+                action="funding_leads",
+                signal="fresh_form_d_funding",
+                source="SEC EDGAR",
+                retrieved_at=retrieved_at,
+            )
+            for lead in result.get("leads", [])
+        ]
+    # Snapshot, insider, and filing search are each one structured intelligence
+    # result. This also keeps those utility actions inexpensive under PPE.
+    return [result]
 
 
 def main():
     inp = read_input()
     result = run(inp)
-    # funding_leads: one dataset item per lead (works with pay-per-result). Others: one item.
-    if inp.get("action") == "funding_leads" and result.get("leads"):
-        items = [dict(lead, signal="fresh_form_d_funding") for lead in result["leads"]]
-        push_to_dataset(items)
-        result["_pushed_items"] = len(items)
-    else:
-        push_to_dataset(result)
+
+    if result.get("error"):
+        try:
+            save_output(result)
+        finally:
+            print(json.dumps(result, indent=2, default=str))
+        raise SystemExit(2)
+
+    try:
+        items = _dataset_items(result)
+        result["_pushed_items"] = push_to_dataset(items)
+        save_output(result)
+    except Exception as error:
+        failure = _error(f"Could not persist Actor output: {error}", result.get("_meta", {}).get("action"))
+        try:
+            save_output(failure)
+        finally:
+            print(json.dumps(failure, indent=2, default=str))
+        raise SystemExit(3)
+
     print(json.dumps(result, indent=2, default=str))
 
 

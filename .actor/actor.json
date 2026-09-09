@@ -1,9 +1,19 @@
 {
   "actorSpecification": 1,
   "name": "edgar-signals",
-  "title": "SEC EDGAR Signals — Funding Leads, Insider Trades, Filing Intel",
-  "description": "Structured signals from SEC EDGAR: newest Form D funding filings (freshly-funded companies = B2B leads), Form 4 insider buys/sells by directors and officers, company snapshots with latest financials, and full-text filing search. Free public source, no API key.",
-  "version": "0.9",
+  "title": "SEC EDGAR Funding Leads & Insider Signals",
+  "description": "Turn official SEC filings into sales-ready funding leads and investor intelligence. Get newly funded companies with phone, amount raised, location and executives; accurate Form 4 buy/sell signals; company financials; and full-text filing search. No external API key.",
+  "version": "1.0",
+  "buildTag": "latest",
+  "readme": "../README.md",
+  "changelog": "../CHANGELOG.md",
   "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  },
+  "defaultMemoryMbytes": 256,
+  "minMemoryMbytes": 128,
+  "maxMemoryMbytes": 512,
   "dockerfile": "../Dockerfile"
 }

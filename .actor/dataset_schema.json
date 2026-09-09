@@ -1,0 +1,191 @@
+{
+  "$schema": "https://apify-projects.github.io/actor-json-schemas/dataset.json?v=0.7",
+  "actorSpecification": 1,
+  "fields": {
+    "type": "object",
+    "description": "A funding lead, company snapshot, insider signal, or filing-search result from official SEC EDGAR data.",
+    "properties": {
+      "record_type": {
+        "type": "string",
+        "title": "Record type",
+        "enum": ["funding_lead", "company_snapshot", "insider_signal", "filing_search"],
+        "description": "Stable discriminator for downstream automation."
+      },
+      "action": {"type": "string", "title": "Action"},
+      "company": {"type": ["string", "null"], "title": "Company", "description": "Legal issuer name as filed with the SEC."},
+      "name": {"type": ["string", "null"], "title": "Company name"},
+      "ticker": {"type": ["string", "null"], "title": "Ticker"},
+      "cik": {"type": ["integer", "null"], "title": "CIK", "description": "SEC Central Index Key."},
+      "form_d_filed": {"type": ["string", "null"], "format": "date", "title": "Form D filed"},
+      "date_of_first_sale": {"type": ["string", "null"], "format": "date", "title": "First sale date"},
+      "freshness_days": {"type": ["integer", "null"], "title": "Age (days)"},
+      "filing_lag_days": {"type": ["integer", "null"], "title": "Filing lag (days)"},
+      "amount_raised_usd": {"type": ["number", "null"], "title": "Amount raised (USD)", "description": "Form D totalAmountSold; actual securities sold, not the target offering size."},
+      "total_offering_usd": {"type": ["number", "null"], "title": "Offering target (USD)"},
+      "total_amount_sold_usd": {"type": ["number", "null"], "title": "Amount sold (USD)"},
+      "total_remaining_usd": {"type": ["number", "null"], "title": "Remaining (USD)"},
+      "minimum_investment_usd": {"type": ["number", "null"], "title": "Minimum investment (USD)"},
+      "industry": {"type": ["string", "null"], "title": "Industry"},
+      "entity_type": {"type": ["string", "null"], "title": "Entity type"},
+      "jurisdiction": {"type": ["string", "null"], "title": "Jurisdiction"},
+      "year_of_incorporation": {"type": ["integer", "null"], "title": "Incorporated"},
+      "revenue_range": {"type": ["string", "null"], "title": "Revenue range"},
+      "phone": {"type": ["string", "null"], "title": "Phone"},
+      "primary_contact_name": {"type": ["string", "null"], "title": "Primary contact"},
+      "primary_contact_title": {"type": ["string", "null"], "title": "Contact title"},
+      "executives": {
+        "type": "array",
+        "title": "Executives / related persons",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "relationship": {"type": ["string", "null"]},
+            "title": {"type": ["string", "null"]}
+          }
+        }
+      },
+      "location": {"type": ["string", "null"], "title": "Location"},
+      "street": {"type": ["string", "null"], "title": "Street"},
+      "street2": {"type": ["string", "null"], "title": "Street 2"},
+      "city": {"type": ["string", "null"], "title": "City"},
+      "state_code": {"type": ["string", "null"], "title": "State code"},
+      "state": {"type": ["string", "null"], "title": "State"},
+      "zip": {"type": ["string", "null"], "title": "ZIP / postal code"},
+      "securities_offered": {"type": "array", "title": "Securities", "items": {"type": "string"}},
+      "federal_exemptions": {"type": "array", "title": "Exemptions", "items": {"type": "string"}},
+      "investors_count": {"type": ["number", "null"], "title": "Investors"},
+      "is_amendment": {"type": "boolean", "title": "Amendment"},
+      "is_pooled_fund": {"type": "boolean", "title": "Pooled fund"},
+      "accession": {"type": ["string", "null"], "title": "Accession"},
+      "filing_index": {"type": ["string", "null"], "format": "uri", "title": "SEC filing"},
+      "source_url": {"type": ["string", "null"], "format": "uri", "title": "Source XML / JSON"},
+      "source": {"type": ["string", "null"], "title": "Source"},
+      "retrieved_at": {"type": ["string", "null"], "format": "date-time", "title": "Retrieved"},
+      "sic": {"type": ["string", "null"], "title": "SIC"},
+      "sic_description": {"type": ["string", "null"], "title": "SIC industry"},
+      "exchanges": {"type": "array", "title": "Exchanges", "items": {"type": "string"}},
+      "fiscal_year_end": {"type": ["string", "null"], "title": "Fiscal year end"},
+      "business_address": {"type": ["object", "null"], "title": "Business address"},
+      "revenue": {"type": ["object", "null"], "title": "Revenue"},
+      "net_income": {"type": ["object", "null"], "title": "Net income"},
+      "total_assets": {"type": ["object", "null"], "title": "Total assets"},
+      "employees": {"type": ["object", "null"], "title": "Employees"},
+      "recent_filings": {"type": "array", "title": "Recent filings", "items": {"type": "object"}},
+      "summary": {"type": ["object", "null"], "title": "Insider summary"},
+      "filings_returned": {"type": ["integer", "null"], "title": "Form 4 filings"},
+      "insider_transactions": {"type": "array", "title": "Insider filings", "items": {"type": "object"}},
+      "keyword": {"type": ["string", "null"], "title": "Search keyword"},
+      "days_back": {"type": ["integer", "null"], "title": "Lookback days"},
+      "forms": {"type": ["array", "null"], "title": "Forms", "items": {"type": "string"}},
+      "matched_total": {"type": ["integer", "null"], "title": "Total matches"},
+      "returned": {"type": ["integer", "null"], "title": "Returned"},
+      "results": {"type": "array", "title": "Filing matches", "items": {"type": "object"}},
+      "_meta": {"type": ["object", "null"], "title": "Provenance"}
+    }
+  },
+  "views": {
+    "funding_leads": {
+      "title": "Funding leads",
+      "transformation": {
+        "fields": [
+          "company", "amount_raised_usd", "form_d_filed", "freshness_days",
+          "industry", "primary_contact_name", "primary_contact_title", "phone",
+          "location", "total_offering_usd", "investors_count", "securities_offered",
+          "executives", "filing_index", "source_url", "cik"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company": {"label": "Company", "format": "text"},
+          "amount_raised_usd": {"label": "Raised (USD)", "format": "number"},
+          "form_d_filed": {"label": "Filed", "format": "date"},
+          "freshness_days": {"label": "Age (days)", "format": "number"},
+          "industry": {"label": "Industry", "format": "text"},
+          "primary_contact_name": {"label": "Contact", "format": "text"},
+          "primary_contact_title": {"label": "Title", "format": "text"},
+          "phone": {"label": "Phone", "format": "text"},
+          "location": {"label": "Location", "format": "text"},
+          "total_offering_usd": {"label": "Target (USD)", "format": "number"},
+          "investors_count": {"label": "Investors", "format": "number"},
+          "securities_offered": {"label": "Securities", "format": "array"},
+          "executives": {"label": "All executives", "format": "array"},
+          "filing_index": {"label": "SEC filing", "format": "link"},
+          "source_url": {"label": "Source XML", "format": "link"},
+          "cik": {"label": "CIK", "format": "number"}
+        }
+      }
+    },
+    "insider_signal": {
+      "title": "Insider signal",
+      "transformation": {
+        "fields": [
+          "company", "ticker", "summary.net_signal", "summary.open_market_purchase_usd",
+          "summary.open_market_sale_usd", "summary.net_open_market_value_usd",
+          "filings_returned", "insider_transactions", "cik"
+        ],
+        "flatten": ["summary"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company": {"label": "Company"},
+          "ticker": {"label": "Ticker"},
+          "summary.net_signal": {"label": "Net signal"},
+          "summary.open_market_purchase_usd": {"label": "Open-market buys (USD)", "format": "number"},
+          "summary.open_market_sale_usd": {"label": "Open-market sales (USD)", "format": "number"},
+          "summary.net_open_market_value_usd": {"label": "Net value (USD)", "format": "number"},
+          "filings_returned": {"label": "Filings", "format": "number"},
+          "insider_transactions": {"label": "Transactions", "format": "array"},
+          "cik": {"label": "CIK", "format": "number"}
+        }
+      }
+    },
+    "company_snapshot": {
+      "title": "Company snapshot",
+      "transformation": {
+        "fields": [
+          "name", "ticker", "sic_description", "state", "revenue.annual_value",
+          "revenue.annual_fy_end", "net_income.annual_value", "total_assets.value",
+          "employees.value", "recent_filings", "source_url", "cik"
+        ],
+        "flatten": ["revenue", "net_income", "total_assets", "employees"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "name": {"label": "Company"},
+          "ticker": {"label": "Ticker"},
+          "sic_description": {"label": "Industry"},
+          "state": {"label": "State"},
+          "revenue.annual_value": {"label": "Annual revenue", "format": "number"},
+          "revenue.annual_fy_end": {"label": "FY end", "format": "date"},
+          "net_income.annual_value": {"label": "Annual net income", "format": "number"},
+          "total_assets.value": {"label": "Assets", "format": "number"},
+          "employees.value": {"label": "Employees", "format": "number"},
+          "recent_filings": {"label": "Recent filings", "format": "array"},
+          "source_url": {"label": "SEC source", "format": "link"},
+          "cik": {"label": "CIK", "format": "number"}
+        }
+      }
+    },
+    "filing_search": {
+      "title": "Filing search",
+      "transformation": {
+        "fields": ["keyword", "forms", "days_back", "matched_total", "returned", "results"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "keyword": {"label": "Keyword"},
+          "forms": {"label": "Forms", "format": "array"},
+          "days_back": {"label": "Days", "format": "number"},
+          "matched_total": {"label": "All matches", "format": "number"},
+          "returned": {"label": "Returned", "format": "number"},
+          "results": {"label": "Matches", "format": "array"}
+        }
+      }
+    }
+  }
+}

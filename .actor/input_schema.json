@@ -1,83 +1,163 @@
 {
   "title": "SEC EDGAR Signals",
+  "description": "Choose one workflow. Funding leads is the default and returns one dataset row per qualified company.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "action": {
-      "title": "Action",
+      "title": "What do you want to find?",
       "type": "string",
+      "editor": "select",
       "enum": [
-        "snapshot",
         "funding_leads",
         "insider_transactions",
+        "snapshot",
         "filing_search"
       ],
+      "enumTitles": [
+        "Fresh funding leads (Form D)",
+        "Insider buy/sell signals (Form 4)",
+        "Public-company snapshot",
+        "Search SEC filings"
+      ],
       "default": "funding_leads",
-      "editor": "select",
-      "description": "funding_leads = newest Form D filings (companies that just raised = sales leads); insider_transactions = Form 4 director/officer buys and sells; snapshot = company profile + financials + recent filings; filing_search = full-text search across filings."
-    },
-    "symbol": {
-      "title": "Ticker or CIK (snapshot / insider)",
-      "type": "string",
-      "editor": "textfield",
-      "description": "e.g. NVDA, AAPL, TSLA, or a 10-digit CIK",
-      "prefill": "NVDA"
-    },
-    "keyword": {
-      "title": "Keyword (filing_search / optional Form D filter)",
-      "type": "string",
-      "editor": "textfield",
-      "description": "e.g. cybersecurity, artificial intelligence, bankruptcy",
-      "prefill": "artificial intelligence"
-    },
-    "forms": {
-      "title": "Filing forms (filing_search)",
-      "type": "string",
-      "editor": "textfield",
-      "description": "Comma-separated form types, e.g. 10-K or 10-K,8-K or 8-K",
-      "default": "10-K"
+      "prefill": "funding_leads",
+      "example": "funding_leads",
+      "description": "Funding leads finds private companies that recently reported a capital raise. The other workflows cover insider trades, public-company fundamentals, and 10-K/10-Q/8-K search."
     },
     "days_back": {
-      "title": "Days back",
+      "title": "Lookback window",
       "type": "integer",
       "editor": "number",
       "minimum": 1,
       "maximum": 3650,
       "default": 30,
-      "description": "How many days back to search (filings / funding window)."
+      "prefill": 7,
+      "example": 7,
+      "unit": "days",
+      "sectionCaption": "Search window and result size",
+      "sectionDescription": "Used by funding leads and filing search. The default Store test requests only 10 recent records for a quick first run.",
+      "description": "Search from today back through this many calendar days."
     },
     "limit": {
-      "title": "Max results",
+      "title": "Maximum results",
       "type": "integer",
       "editor": "number",
       "minimum": 1,
       "maximum": 500,
       "default": 50,
-      "description": "Maximum number of results to return."
+      "prefill": 10,
+      "example": 10,
+      "description": "Hard maximum: the Actor never returns more rows than this value."
     },
     "industries": {
-      "title": "Sector filter (funding_leads)",
-      "type": "string",
-      "editor": "textfield",
-      "description": "Optional comma-separated Form D sectors to keep, e.g. 'Other Technology' or 'Health Care,Other Technology'. Leave blank for all operating companies.",
-      "default": ""
+      "title": "Industries to include",
+      "type": "array",
+      "editor": "stringList",
+      "default": [],
+      "example": ["Other Technology", "Health Care"],
+      "sectionCaption": "Funding-lead qualification",
+      "sectionDescription": "Optional Form D filters. Leave lists empty and amounts at 0 to accept all operating-company leads.",
+      "description": "Optional SEC industry names or partial matches, one per line; for example Other Technology, Health Care, Oil and Gas, or Banking.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "states": {
+      "title": "US states to include",
+      "type": "array",
+      "editor": "stringList",
+      "default": [],
+      "example": ["CA", "NY", "TX"],
+      "description": "Optional two-letter codes or full state names, one per line. Leave empty for every location.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "min_amount_raised_usd": {
+      "title": "Minimum amount raised",
+      "type": "integer",
+      "editor": "number",
+      "minimum": 0,
+      "default": 0,
+      "example": 1000000,
+      "unit": "USD",
+      "description": "Require at least this much in Form D totalAmountSold. 0 disables the filter."
+    },
+    "max_amount_raised_usd": {
+      "title": "Maximum amount raised",
+      "type": "integer",
+      "editor": "number",
+      "minimum": 0,
+      "default": 0,
+      "example": 50000000,
+      "unit": "USD",
+      "description": "Exclude raises above this amount. 0 means no upper limit."
+    },
+    "only_with_phone": {
+      "title": "Only leads with a phone number",
+      "type": "boolean",
+      "editor": "checkbox",
+      "default": false,
+      "description": "Return only filings that disclose an issuer phone number."
+    },
+    "only_with_executives": {
+      "title": "Only leads with a named executive",
+      "type": "boolean",
+      "editor": "checkbox",
+      "default": false,
+      "description": "Return only filings with at least one disclosed related person or signatory."
     },
     "exclude_funds": {
-      "title": "Exclude investment funds (funding_leads)",
+      "title": "Exclude investment funds",
       "type": "boolean",
       "editor": "checkbox",
-      "description": "Drop pooled investment funds / SPVs from results (recommended for B2B leads).",
-      "default": true
+      "default": true,
+      "description": "Remove pooled investment funds and fund entities; recommended for B2B prospecting."
     },
     "exclude_real_estate": {
-      "title": "Exclude property SPVs (funding_leads)",
+      "title": "Exclude property SPVs",
       "type": "boolean",
       "editor": "checkbox",
-      "description": "Drop real-estate / property-owning LLCs that are not operating companies.",
-      "default": true
+      "default": true,
+      "description": "Remove real-estate holding vehicles and property-specific LLCs; recommended for operating-company leads."
+    },
+    "include_amendments": {
+      "title": "Include Form D amendments",
+      "type": "boolean",
+      "editor": "checkbox",
+      "default": false,
+      "description": "Also search D/A amendments. Disabled by default so a changed filing is not mistaken for a brand-new raise."
+    },
+    "symbol": {
+      "title": "Ticker or CIK",
+      "type": "string",
+      "editor": "textfield",
+      "example": "NVDA",
+      "sectionCaption": "Company snapshot / insider trades",
+      "sectionDescription": "Used only by the snapshot and insider-transactions workflows.",
+      "description": "US public-company ticker such as NVDA, AAPL, MSFT, or a numeric SEC CIK."
+    },
+    "keyword": {
+      "title": "Filing-search keyword",
+      "type": "string",
+      "editor": "textfield",
+      "example": "cybersecurity",
+      "sectionCaption": "Full-text filing search",
+      "sectionDescription": "Used by filing_search. It can also be used as an optional full-text filter for funding_leads.",
+      "description": "Word or phrase to find in SEC filings, for example cybersecurity, bankruptcy, or material weakness."
+    },
+    "forms": {
+      "title": "SEC form types",
+      "type": "array",
+      "editor": "stringList",
+      "default": ["10-K", "10-Q", "8-K"],
+      "example": ["10-K", "8-K"],
+      "description": "Form types for filing_search, one per line. Common values: 10-K, 10-Q, 8-K, S-1, DEF 14A.",
+      "items": {
+        "type": "string"
+      }
     }
   },
-  "required": [
-    "action"
-  ]
+  "required": ["action"]
 }

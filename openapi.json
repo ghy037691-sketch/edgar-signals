@@ -1,0 +1,258 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SEC EDGAR Signals API",
+    "version": "1.0.0",
+    "description": "Structured funding leads, insider transactions, public-company fundamentals, and filing search from official SEC EDGAR endpoints. This public demo requires no key and is intended for evaluation; use the Apify Actor for scheduled or production workloads.",
+    "contact": {
+      "url": "https://github.com/ghy037691-sketch/edgar-signals/issues"
+    },
+    "license": {
+      "name": "Public SEC data; application terms in repository"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://edgar-signals.onrender.com",
+      "description": "Public demonstration API"
+    }
+  ],
+  "tags": [
+    {"name": "Funding leads"},
+    {"name": "Insider signals"},
+    {"name": "Company intelligence"},
+    {"name": "Filing search"},
+    {"name": "Service"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Service"],
+        "summary": "Service health",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {"description": "Service is ready", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Health"}}}}
+        }
+      }
+    },
+    "/funding_leads": {
+      "get": {
+        "tags": ["Funding leads"],
+        "summary": "Get newly filed, qualified Form D funding leads",
+        "operationId": "getFundingLeads",
+        "parameters": [
+          {"$ref": "#/components/parameters/DaysBack"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"name": "keyword", "in": "query", "schema": {"type": "string"}, "description": "Optional full-text Form D phrase."},
+          {"name": "industries", "in": "query", "schema": {"type": "string"}, "description": "Comma-separated industry names or partial matches."},
+          {"name": "states", "in": "query", "schema": {"type": "string"}, "description": "Comma-separated state codes or names."},
+          {"name": "min_amount_raised_usd", "in": "query", "schema": {"type": "number", "minimum": 0, "default": 0}},
+          {"name": "max_amount_raised_usd", "in": "query", "schema": {"type": "number", "minimum": 0, "default": 0}},
+          {"name": "only_with_phone", "in": "query", "schema": {"type": "boolean", "default": false}},
+          {"name": "only_with_executives", "in": "query", "schema": {"type": "boolean", "default": false}},
+          {"name": "exclude_funds", "in": "query", "schema": {"type": "boolean", "default": true}},
+          {"name": "exclude_real_estate", "in": "query", "schema": {"type": "boolean", "default": true}},
+          {"name": "include_amendments", "in": "query", "schema": {"type": "boolean", "default": false}}
+        ],
+        "responses": {
+          "200": {"description": "Qualified leads and run counts", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FundingRun"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "502": {"$ref": "#/components/responses/UpstreamError"}
+        }
+      }
+    },
+    "/snapshot": {
+      "get": {
+        "tags": ["Company intelligence"],
+        "summary": "Get a public-company profile and financial snapshot",
+        "operationId": "getCompanySnapshot",
+        "parameters": [{"$ref": "#/components/parameters/Symbol"}],
+        "responses": {
+          "200": {"description": "Company snapshot", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CompanySnapshot"}}}},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    },
+    "/insider": {
+      "get": {
+        "tags": ["Insider signals"],
+        "summary": "Get Form 4 transactions and an open-market net signal",
+        "operationId": "getInsiderTransactions",
+        "parameters": [
+          {"$ref": "#/components/parameters/Symbol"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {"description": "Insider signal", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InsiderSignal"}}}},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": ["Filing search"],
+        "summary": "Search SEC filings by keyword and form",
+        "operationId": "searchFilings",
+        "parameters": [
+          {"name": "keyword", "in": "query", "required": true, "schema": {"type": "string", "minLength": 1}, "example": "cybersecurity"},
+          {"name": "forms", "in": "query", "schema": {"type": "string", "default": "10-K,10-Q,8-K"}, "description": "Comma-separated SEC form types."},
+          {"$ref": "#/components/parameters/DaysBack"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {"description": "Filing matches", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FilingSearch"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    },
+    "/run": {
+      "post": {
+        "tags": ["Service"],
+        "summary": "Run any workflow with the Apify-compatible input object",
+        "operationId": "runWorkflow",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/RunInput"},
+              "examples": {
+                "funding": {"value": {"action": "funding_leads", "days_back": 7, "limit": 10}},
+                "snapshot": {"value": {"action": "snapshot", "symbol": "AAPL"}}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Workflow result", "content": {"application/json": {"schema": {"type": "object"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "413": {"description": "Request body too large"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Symbol": {"name": "symbol", "in": "query", "required": true, "schema": {"type": "string"}, "description": "Public-company ticker or numeric SEC CIK.", "example": "AAPL"},
+      "DaysBack": {"name": "days_back", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 3650, "default": 30}},
+      "Limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 25}, "description": "Public demo maximum is 100."}
+    },
+    "responses": {
+      "BadRequest": {"description": "Invalid or missing input", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "NotFound": {"description": "Ticker or CIK could not be resolved", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "RateLimited": {"description": "Public demo request limit reached", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "UpstreamError": {"description": "SEC upstream request failed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    },
+    "schemas": {
+      "RunInput": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string", "enum": ["funding_leads", "insider_transactions", "snapshot", "filing_search"], "default": "funding_leads"},
+          "symbol": {"type": "string"},
+          "keyword": {"type": "string"},
+          "forms": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+          "days_back": {"type": "integer", "minimum": 1, "maximum": 3650},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+          "industries": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+          "states": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+          "min_amount_raised_usd": {"type": "number", "minimum": 0},
+          "max_amount_raised_usd": {"type": "number", "minimum": 0},
+          "only_with_phone": {"type": "boolean"},
+          "only_with_executives": {"type": "boolean"},
+          "exclude_funds": {"type": "boolean"},
+          "exclude_real_estate": {"type": "boolean"},
+          "include_amendments": {"type": "boolean"}
+        }
+      },
+      "FundingLead": {
+        "type": "object",
+        "properties": {
+          "record_type": {"const": "funding_lead"},
+          "company": {"type": ["string", "null"]},
+          "cik": {"type": ["integer", "null"]},
+          "form_d_filed": {"type": ["string", "null"], "format": "date"},
+          "date_of_first_sale": {"type": ["string", "null"], "format": "date"},
+          "amount_raised_usd": {"type": ["number", "null"]},
+          "total_offering_usd": {"type": ["number", "null"]},
+          "industry": {"type": ["string", "null"]},
+          "phone": {"type": ["string", "null"]},
+          "primary_contact_name": {"type": ["string", "null"]},
+          "primary_contact_title": {"type": ["string", "null"]},
+          "executives": {"type": "array", "items": {"type": "object"}},
+          "location": {"type": ["string", "null"]},
+          "filing_index": {"type": ["string", "null"], "format": "uri"},
+          "source_url": {"type": ["string", "null"], "format": "uri"}
+        }
+      },
+      "FundingRun": {
+        "type": "object",
+        "properties": {
+          "record_type": {"const": "funding_leads_run"},
+          "days_back": {"type": "integer"},
+          "matched_form_d_total": {"type": ["integer", "null"]},
+          "scanned": {"type": "integer"},
+          "returned": {"type": "integer"},
+          "leads": {"type": "array", "items": {"$ref": "#/components/schemas/FundingLead"}}
+        }
+      },
+      "CompanySnapshot": {
+        "type": "object",
+        "properties": {
+          "record_type": {"const": "company_snapshot"},
+          "cik": {"type": "integer"},
+          "ticker": {"type": "string"},
+          "name": {"type": "string"},
+          "sic": {"type": ["string", "null"]},
+          "sic_description": {"type": ["string", "null"]},
+          "revenue": {"type": "object"},
+          "net_income": {"type": "object"},
+          "recent_filings": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "InsiderSignal": {
+        "type": "object",
+        "properties": {
+          "record_type": {"const": "insider_signal"},
+          "company": {"type": "string"},
+          "ticker": {"type": "string"},
+          "cik": {"type": "integer"},
+          "summary": {"type": "object"},
+          "insider_transactions": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "FilingSearch": {
+        "type": "object",
+        "properties": {
+          "record_type": {"const": "filing_search"},
+          "keyword": {"type": "string"},
+          "forms": {"type": ["array", "null"], "items": {"type": "string"}},
+          "matched_total": {"type": ["integer", "null"]},
+          "returned": {"type": "integer"},
+          "results": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": ["ok", "service", "version"],
+        "properties": {
+          "ok": {"type": "boolean"},
+          "service": {"type": "string"},
+          "version": {"type": "string"},
+          "source": {"type": "string"}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {"type": "string"},
+          "request_id": {"type": "string"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://apify-projects.github.io/actor-json-schemas/output.json?v=0.7",
+  "actorOutputSchemaVersion": 1,
+  "title": "SEC EDGAR Signals output",
+  "description": "Qualified records are stored in the default dataset; the complete run response and metadata are also available in OUTPUT.",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Qualified SEC signals",
+      "description": "Customer-visible records. A funding run writes one row per qualified lead; the other workflows write one structured intelligence row.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?clean=true"
+    },
+    "runResult": {
+      "type": "string",
+      "title": "Complete run result",
+      "description": "Complete response including filters, counts, provenance, and nested results. Errors are saved here without creating a billable dataset item.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/OUTPUT"
+    }
+  }
+}

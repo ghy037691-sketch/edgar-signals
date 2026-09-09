@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Turn official SEC EDGAR filings into funding leads, insider signals, company fundamentals, and searchable filing intelligence.">
+  <meta name="theme-color" content="#071321">
+  <title>SEC EDGAR Signals — Official filings, usable intelligence</title>
+  <style>
+    :root{--ink:#071321;--navy:#102844;--navy2:#173755;--paper:#f7fafc;--muted:#607287;--line:#dbe5ee;--mint:#29d3a2;--mint2:#8df4d2;--blue:#2d7ff9;--white:#fff;--shadow:0 24px 70px rgba(7,19,33,.13)}
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} a{color:inherit;text-decoration:none} button,input,select{font:inherit}
+    .wrap{width:min(1160px,calc(100% - 40px));margin:auto}.nav{height:76px;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;gap:12px;align-items:center;font-weight:800;letter-spacing:-.02em}.brandmark{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,var(--navy2),var(--ink));display:grid;place-items:center;box-shadow:0 8px 24px rgba(7,19,33,.16)}.brandmark svg{width:25px}.navlinks{display:flex;gap:28px;align-items:center;color:#40556b;font-size:14px;font-weight:650}.pill,.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:12px;font-weight:750;transition:.2s ease}.pill{padding:9px 14px;border:1px solid var(--line);background:#fff}.status-dot{width:8px;height:8px;border-radius:99px;background:var(--mint);box-shadow:0 0 0 4px rgba(41,211,162,.13)}
+    .hero{padding:72px 0 86px;display:grid;grid-template-columns:1.04fr .96fr;gap:76px;align-items:center}.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 12px;background:#e9f9f4;color:#08785b;border:1px solid #c7f1e4;border-radius:99px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.hero h1{font-size:clamp(46px,6vw,74px);line-height:1.01;letter-spacing:-.06em;margin:22px 0 24px;max-width:760px}.hero h1 span{background:linear-gradient(100deg,#08785b,#16aa80);-webkit-background-clip:text;background-clip:text;color:transparent}.lede{font-size:19px;line-height:1.65;color:#4f6378;max-width:650px;margin:0 0 34px}.actions{display:flex;gap:12px;flex-wrap:wrap}.btn{padding:13px 20px;border:1px solid transparent;cursor:pointer}.btn.primary{background:var(--ink);color:#fff;box-shadow:0 10px 28px rgba(7,19,33,.2)}.btn.primary:hover{transform:translateY(-2px);background:#102844}.btn.secondary{background:#fff;border-color:var(--line);color:var(--ink)}.btn.secondary:hover{border-color:#aebfd0}.trust{display:flex;gap:21px;flex-wrap:wrap;margin-top:27px;color:#607287;font-size:13px}.trust span:before{content:"✓";color:#0c9d77;font-weight:900;margin-right:7px}
+    .terminal{background:var(--ink);color:#d9e8f4;border:1px solid #1d3c59;border-radius:22px;box-shadow:0 30px 75px rgba(7,19,33,.28);overflow:hidden;position:relative}.terminal:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 80% 5%,rgba(41,211,162,.13),transparent 34%);pointer-events:none}.termbar{height:52px;border-bottom:1px solid #1c3650;display:flex;align-items:center;gap:7px;padding:0 18px;color:#7e9ab2;font-size:12px}.dot{width:10px;height:10px;border-radius:50%;background:#35516b}.dot:nth-child(1){background:#ff6b6b}.dot:nth-child(2){background:#f4c95d}.dot:nth-child(3){background:#29d3a2}.term-title{margin-left:9px}.code{padding:25px 28px 30px;margin:0;min-height:410px;overflow:auto;font:13px/1.72 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}.k{color:#8df4d2}.s{color:#c6d9ea}.n{color:#69a7ff}.dim{color:#6e8ba4}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 45px rgba(7,19,33,.06);margin-bottom:100px}.stat{background:#fff;padding:25px}.stat b{font-size:30px;letter-spacing:-.04em;display:block}.stat span{font-size:13px;color:var(--muted)}
+    section{padding:30px 0 90px}.sectiontag{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#098061;font-weight:850}.sectiontitle{font-size:clamp(34px,4vw,48px);line-height:1.12;letter-spacing:-.045em;margin:11px 0 16px}.sectioncopy{color:var(--muted);max-width:680px;font-size:17px}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:38px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:27px;box-shadow:0 8px 30px rgba(7,19,33,.04)}.icon{width:43px;height:43px;border-radius:12px;background:#eaf9f5;color:#08785b;display:grid;place-items:center;font-weight:900}.card h3{font-size:20px;margin:17px 0 7px;letter-spacing:-.02em}.card p{margin:0;color:var(--muted);font-size:14px}.route{margin-top:17px;display:inline-block;padding:5px 9px;border-radius:7px;background:#f0f4f8;color:#34506b;font:12px ui-monospace,monospace}
+    .play{display:grid;grid-template-columns:.76fr 1.24fr;gap:20px;margin-top:35px}.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:25px}.field{display:block;margin-bottom:17px}.field span{display:block;font-size:12px;color:#536a80;font-weight:750;margin-bottom:6px}.field input,.field select{width:100%;border:1px solid #ccdae6;background:#fbfdff;border-radius:10px;padding:11px 12px;color:var(--ink);outline:none}.field input:focus,.field select:focus{border-color:#3ccda4;box-shadow:0 0 0 3px rgba(41,211,162,.12)}.run{width:100%}.output{background:#071321;color:#d8e7f2;min-height:440px;overflow:auto;font:12px/1.65 ui-monospace,monospace;white-space:pre-wrap}.output.loading{color:#8df4d2}.micro{color:#7990a5;font-size:12px;margin-top:13px}.quality{background:linear-gradient(135deg,#0b1d30,#123654);color:#fff;border-radius:25px;padding:46px;display:grid;grid-template-columns:1fr 1fr;gap:55px;box-shadow:var(--shadow)}.quality h2{font-size:36px;line-height:1.15;letter-spacing:-.04em;margin:0 0 15px}.quality p{color:#b9cbda}.checks{display:grid;gap:14px}.check{display:flex;gap:13px;align-items:flex-start;padding:14px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:12px}.check b{display:block;font-size:14px}.check span{color:#aabfd0;font-size:12px}.tick{color:var(--mint);font-weight:900}
+    footer{border-top:1px solid var(--line);padding:30px 0 45px;color:#6a7e91;font-size:13px}.foot{display:flex;justify-content:space-between;gap:25px;align-items:center}.links{display:flex;gap:20px}.legal{max-width:700px}
+    @media(max-width:900px){.hero,.play,.quality{grid-template-columns:1fr}.hero{gap:45px;padding-top:40px}.stats{grid-template-columns:repeat(2,1fr)}.navlinks a:not(.pill){display:none}.quality{padding:30px}.cards{grid-template-columns:1fr}}
+    @media(max-width:560px){.wrap{width:min(100% - 24px,1160px)}.hero h1{font-size:43px}.stats{grid-template-columns:1fr 1fr}.stat{padding:19px}.actions .btn{width:100%}.navlinks .pill{display:none}.code{padding:20px;min-height:390px}.foot{display:block}.links{margin-top:16px;flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+  <header class="wrap nav">
+    <a class="brand" href="/"><span class="brandmark" aria-hidden="true"><svg viewBox="0 0 30 30"><path d="M7 4h11l5 5v17H7z" fill="#fff"/><path d="M18 4v5h5" fill="#cde5e0"/><path d="m9 21 4-4 3 2 6-7" fill="none" stroke="#29d3a2" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span> SEC EDGAR Signals</a>
+    <nav class="navlinks"><a href="#workflows">Workflows</a><a href="#playground">Live API</a><a href="/openapi.json">OpenAPI</a><a class="pill" href="/health"><i class="status-dot"></i> Service live</a></nav>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div>
+        <span class="eyebrow">Official public filings · No external key</span>
+        <h1>Raw SEC filings.<br><span>Usable signals.</span></h1>
+        <p class="lede">Find companies that recently reported raising capital, separate real insider buys and sells from compensation noise, and search public-company intelligence — structured for CRMs, research, and AI agents.</p>
+        <div class="actions">
+          <a class="btn primary" href="#playground">Try the live API <span>→</span></a>
+          <a class="btn secondary" href="https://apify.com/educable_santoor/edgar-signals">Run on Apify</a>
+        </div>
+        <div class="trust"><span>Official SEC source</span><span>No fabricated contacts</span><span>Auditable source links</span></div>
+      </div>
+      <div class="terminal" aria-label="Example funding lead JSON">
+        <div class="termbar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="term-title">funding_lead.json</span></div>
+        <pre class="code"><span class="dim">{</span>
+  <span class="k">"company"</span>: <span class="s">"Malayy Inc."</span>,
+  <span class="k">"signal"</span>: <span class="s">"fresh_form_d_funding"</span>,
+  <span class="k">"amount_raised_usd"</span>: <span class="n">10129977</span>,
+  <span class="k">"industry"</span>: <span class="s">"Other Technology"</span>,
+  <span class="k">"phone"</span>: <span class="s">"332-240-6650"</span>,
+  <span class="k">"location"</span>: <span class="s">"NEW YORK, NY"</span>,
+  <span class="k">"executives"</span>: <span class="dim">[</span>
+    <span class="dim">{</span>
+      <span class="k">"name"</span>: <span class="s">"Filed related person"</span>,
+      <span class="k">"relationship"</span>: <span class="s">"Executive Officer"</span>
+    <span class="dim">}</span>
+  <span class="dim">]</span>,
+  <span class="k">"source"</span>: <span class="s">"SEC EDGAR"</span>
+<span class="dim">}</span></pre>
+      </div>
+    </div>
+
+    <div class="wrap stats">
+      <div class="stat"><b>4</b><span>intelligence workflows</span></div>
+      <div class="stat"><b>0</b><span>paid data providers required</span></div>
+      <div class="stat"><b>1 row</b><span>per qualified funding lead</span></div>
+      <div class="stat"><b>100%</b><span>source-linked and auditable</span></div>
+    </div>
+
+    <section id="workflows" class="wrap">
+      <div class="sectiontag">One API, four workflows</div>
+      <h2 class="sectiontitle">From fundraising to risk signals.</h2>
+      <p class="sectioncopy">Each workflow uses stable SEC JSON or XML endpoints, applies deterministic normalization, and returns predictable records instead of scraped page fragments.</p>
+      <div class="cards">
+        <article class="card"><div class="icon">$</div><h3>Fresh funding leads</h3><p>New Form D operating companies with amount sold, phone, executives, industry, location, security type, and precise SEC evidence.</p><code class="route">GET /funding_leads</code></article>
+        <article class="card"><div class="icon">↗</div><h3>Insider transactions</h3><p>Form 4 detail and company-level net activity. Only open-market P/S transactions become bullish or bearish signals.</p><code class="route">GET /insider</code></article>
+        <article class="card"><div class="icon">◎</div><h3>Company snapshot</h3><p>Identity, SIC, addresses, annual versus quarterly fundamentals, and direct links to recent material filings.</p><code class="route">GET /snapshot</code></article>
+        <article class="card"><div class="icon">⌕</div><h3>Filing search</h3><p>Search phrases across 10-K, 10-Q, 8-K, S-1, and other forms with clean company and accession metadata.</p><code class="route">GET /search</code></article>
+      </div>
+    </section>
+
+    <section id="playground" class="wrap">
+      <div class="sectiontag">Live playground</div>
+      <h2 class="sectiontitle">Test real SEC data now.</h2>
+      <p class="sectioncopy">This public demonstration requires no key. Large recurring jobs belong on Apify, where you can schedule runs and export datasets.</p>
+      <div class="play">
+        <form class="panel" id="form">
+          <label class="field"><span>Workflow</span><select id="action"><option value="funding_leads">Fresh funding leads</option><option value="snapshot">Company snapshot</option><option value="insider">Insider signals</option><option value="search">Filing search</option></select></label>
+          <label class="field contextual company"><span>Ticker / CIK</span><input id="symbol" value="AAPL" placeholder="AAPL"></label>
+          <label class="field contextual search"><span>Keyword</span><input id="keyword" value="cybersecurity" placeholder="material weakness"></label>
+          <label class="field contextual search"><span>Forms (comma separated)</span><input id="forms" value="10-K,8-K" placeholder="10-K,8-K"></label>
+          <label class="field contextual common"><span>Days back</span><input id="days" type="number" value="7" min="1" max="3650"></label>
+          <label class="field contextual common"><span>Maximum results</span><input id="limit" type="number" value="5" min="1" max="25"></label>
+          <button class="btn primary run" type="submit">Run live query <span>→</span></button>
+          <p class="micro">Demo requests are capped for shared reliability. Data is returned directly from official SEC endpoints.</p>
+        </form>
+        <pre class="panel output" id="output">Choose a workflow and run a live query.
+
+Tip: try AAPL for a financial snapshot, MSFT for insider activity, or “bankruptcy” across 8-K filings.</pre>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="quality">
+        <div><div class="sectiontag" style="color:#8df4d2">Built for trust</div><h2>Honest nulls beat invented intelligence.</h2><p>The system returns what the filing actually says. Every decision-useful value stays traceable to an accession and official source document.</p><a class="btn secondary" href="/openapi.json" style="margin-top:10px">Open API specification</a></div>
+        <div class="checks">
+          <div class="check"><i class="tick">✓</i><div><b>Accurate insider semantics</b><span>Gifts, awards, exercises, and withholding do not masquerade as market conviction.</span></div></div>
+          <div class="check"><i class="tick">✓</i><div><b>Annual versus quarterly clarity</b><span>Financial facts preserve form, period, unit, fiscal-year end, and taxonomy.</span></div></div>
+          <div class="check"><i class="tick">✓</i><div><b>Qualified lead billing</b><span>Rejected funds, SPVs, duplicates, zero matches, and errors do not become paid lead rows.</span></div></div>
+          <div class="check"><i class="tick">✓</i><div><b>SEC fair-access controls</b><span>Identified client, bounded retries, throttled starts, and no fragile browser scraping.</span></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="wrap foot"><div class="legal">Independent product; not affiliated with or endorsed by the U.S. SEC. Public filings are not legal, financial, or investment advice.</div><div class="links"><a href="/health">Health</a><a href="/openapi.json">OpenAPI</a><a href="https://github.com/ghy037691-sketch/edgar-signals">GitHub</a><a href="https://apify.com/educable_santoor/edgar-signals">Apify</a></div></div></footer>
+
+  <script>
+    const action=document.querySelector('#action'), output=document.querySelector('#output'), form=document.querySelector('#form');
+    function fields(){const a=action.value;document.querySelector('.company').style.display=(a==='snapshot'||a==='insider')?'block':'none';document.querySelectorAll('.search').forEach(x=>x.style.display=a==='search'?'block':'none');document.querySelectorAll('.common').forEach(x=>x.style.display=(a==='funding_leads'||a==='search')?'block':'none')}
+    action.addEventListener('change',fields);fields();
+    form.addEventListener('submit',async e=>{e.preventDefault();const a=action.value;let url='';const lim=Math.max(1,Math.min(25,Number(document.querySelector('#limit').value)||5));const days=Math.max(1,Number(document.querySelector('#days').value)||7);if(a==='funding_leads')url=`/funding_leads?days_back=${days}&limit=${lim}`;if(a==='snapshot')url=`/snapshot?symbol=${encodeURIComponent(document.querySelector('#symbol').value)}`;if(a==='insider')url=`/insider?symbol=${encodeURIComponent(document.querySelector('#symbol').value)}&limit=${lim}`;if(a==='search')url=`/search?keyword=${encodeURIComponent(document.querySelector('#keyword').value)}&forms=${encodeURIComponent(document.querySelector('#forms').value)}&days_back=${days}&limit=${lim}`;output.classList.add('loading');output.textContent='Querying official SEC filings…';try{const r=await fetch(url),d=await r.json();output.textContent=JSON.stringify(d,null,2);if(!r.ok)output.textContent=`HTTP ${r.status}\n`+output.textContent}catch(err){output.textContent='Request failed: '+err.message}finally{output.classList.remove('loading')}});
+  </script>
+</body>
+</html>
