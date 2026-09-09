@@ -10,6 +10,7 @@ billing, errors and zero-result funding runs never create a paid dataset item.
 from datetime import datetime, timezone
 import glob
 import json
+import math
 import os
 import sys
 import time
@@ -125,7 +126,8 @@ def _integer(value, default, minimum, maximum):
 
 def _number(value, default=0):
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else default
     except (TypeError, ValueError):
         return default
 
@@ -140,12 +142,22 @@ def _boolean(value, default=False):
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _list(value):
+def _text(value, max_length):
+    return str(value or "").strip()[:max_length]
+
+
+def _list(value, max_items=25, max_length=100):
     if value is None:
         return []
-    if isinstance(value, (list, tuple)):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return [item.strip() for item in str(value).split(",") if item.strip()]
+    values = value if isinstance(value, (list, tuple)) else str(value).split(",")
+    result = []
+    for item in values:
+        text = str(item).strip()[:max_length]
+        if text and text not in result:
+            result.append(text)
+        if len(result) >= max_items:
+            break
+    return result
 
 
 def _error(message, action=None):
@@ -199,7 +211,7 @@ def run(inp):
     """Validate input, call the selected action, and attach provenance metadata."""
     if not isinstance(inp, dict):
         return _error("Input must be a JSON object")
-    raw_action = str(inp.get("action") or "funding_leads").strip().lower()
+    raw_action = _text(inp.get("action") or "funding_leads", 50).lower()
     action = ACTION_ALIASES.get(raw_action)
     if not action:
         return _error(f"Unknown action '{raw_action}'", raw_action)
@@ -211,7 +223,7 @@ def run(inp):
         result = edgar.funding_leads(
             days_back=days_back,
             limit=limit,
-            keyword=(str(inp.get("keyword") or "").strip() or None),
+            keyword=(_text(inp.get("keyword"), 200) or None),
             exclude_funds=_boolean(inp.get("exclude_funds"), True),
             exclude_real_estate=_boolean(inp.get("exclude_real_estate"), True),
             industries=_list(inp.get("industries")),
@@ -223,20 +235,20 @@ def run(inp):
             include_amendments=_boolean(inp.get("include_amendments"), False),
         )
     elif action in ("snapshot", "insider_transactions"):
-        symbol = inp.get("symbol") or inp.get("ticker") or inp.get("cik")
-        if symbol is None or not str(symbol).strip():
+        symbol = _text(inp.get("symbol") or inp.get("ticker") or inp.get("cik"), 32)
+        if not symbol:
             return _error(f"'{action}' requires symbol (ticker or CIK)", action)
         if action == "snapshot":
             result = edgar.company_snapshot(symbol)
         else:
             result = edgar.insider_transactions(symbol, limit=limit)
     else:
-        keyword = str(inp.get("keyword") or inp.get("query") or "").strip()
+        keyword = _text(inp.get("keyword") or inp.get("query"), 200)
         if not keyword:
             return _error("'filing_search' requires a non-empty keyword", action)
         result = edgar.filing_search(
             keyword,
-            forms=_list(inp.get("forms")) or None,
+            forms=_list(inp.get("forms"), max_items=25, max_length=20) or None,
             days_back=days_back,
             limit=limit,
         )
@@ -324,7 +336,7 @@ def main():
         inp = read_input()
         result = run(inp)
     except Exception as error:
-        raw_action = str((inp or {}).get("action") or "funding_leads").strip().lower()
+        raw_action = _text((inp or {}).get("action") or "funding_leads", 50).lower()
         action = ACTION_ALIASES.get(raw_action, raw_action)
         result = _runtime_failure(error, action)
         print(json.dumps({

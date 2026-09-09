@@ -151,6 +151,21 @@ class ActorContractTests(unittest.TestCase):
         main.run({"action": "funding_leads", "exclude_funds": "false"})
         self.assertFalse(funding.call_args.kwargs["exclude_funds"])
 
+    @patch.object(main.edgar, "funding_leads")
+    def test_free_text_lists_and_nonfinite_numbers_are_bounded(self, funding):
+        funding.return_value = {"record_type": "funding_leads_run", "leads": [], "returned": 0}
+        main.run({
+            "action": "funding_leads",
+            "keyword": "x" * 500,
+            "industries": [f"{i}-" + "y" * 150 for i in range(30)],
+            "min_amount_raised_usd": "NaN",
+        })
+        args = funding.call_args.kwargs
+        self.assertEqual(len(args["keyword"]), 200)
+        self.assertEqual(len(args["industries"]), 25)
+        self.assertTrue(all(len(value) <= 100 for value in args["industries"]))
+        self.assertEqual(args["min_amount_raised_usd"], 0)
+
     def test_public_api_caps_result_count(self):
         self.assertEqual(server._cap_input({"limit": 999})["limit"], server.PUBLIC_LIMIT)
         self.assertEqual(server._cap_input({"limit": -2})["limit"], 1)

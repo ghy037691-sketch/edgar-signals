@@ -20,6 +20,7 @@
 - Correct `sic`, which previously contained the SIC description instead of the numeric code.
 - Use exact SEC filing index URLs and include accession numbers in filing-search results.
 - Persist sanitized, explicitly zero-billable `OUTPUT` records when SEC upstream requests fail.
+- Bound free-text/list inputs and reject non-finite amount filters before constructing SEC requests.
 
 ### Performance and cost
 - True concurrent enrichment with the network wait outside the throttle lock.

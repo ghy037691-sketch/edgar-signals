@@ -59,8 +59,10 @@
       "sectionCaption": "Funding-lead qualification",
       "sectionDescription": "Optional Form D filters. Leave lists empty and amounts at 0 to accept all operating-company leads.",
       "description": "Optional SEC industry names or partial matches, one per line; for example Other Technology, Health Care, Oil and Gas, or Banking.",
+      "maxItems": 25,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 100
       }
     },
     "states": {
@@ -70,8 +72,10 @@
       "default": [],
       "example": ["CA", "NY", "TX"],
       "description": "Optional two-letter codes or full state names, one per line. Leave empty for every location.",
+      "maxItems": 25,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "min_amount_raised_usd": {
@@ -133,6 +137,7 @@
       "title": "Ticker or CIK",
       "type": "string",
       "editor": "textfield",
+      "maxLength": 32,
       "example": "NVDA",
       "sectionCaption": "Company snapshot / insider trades",
       "sectionDescription": "Used only by the snapshot and insider-transactions workflows.",
@@ -142,6 +147,7 @@
       "title": "Filing-search keyword",
       "type": "string",
       "editor": "textfield",
+      "maxLength": 200,
       "example": "cybersecurity",
       "sectionCaption": "Full-text filing search",
       "sectionDescription": "Used by filing_search. It can also be used as an optional full-text filter for funding_leads.",
@@ -154,8 +160,10 @@
       "default": ["10-K", "10-Q", "8-K"],
       "example": ["10-K", "8-K"],
       "description": "Form types for filing_search, one per line. Common values: 10-K, 10-Q, 8-K, S-1, DEF 14A.",
+      "maxItems": 25,
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 20
       }
     }
   },
