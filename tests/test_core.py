@@ -154,6 +154,13 @@ class ActorContractTests(unittest.TestCase):
         self.assertEqual(server._cap_input({"limit": 999})["limit"], server.PUBLIC_LIMIT)
         self.assertEqual(server._cap_input({"limit": -2})["limit"], 1)
 
+    def test_error_contract_is_explicitly_non_billable(self):
+        result = main.run({"action": "not-a-real-action"})
+        self.assertEqual(result["record_type"], "error")
+        self.assertEqual(result["_billing"]["billable_items"], 0)
+        self.assertEqual(result["_pushed_items"], 0)
+        self.assertEqual(result["_meta"]["status"], "failed")
+
     def test_all_json_contracts_parse_without_duplicate_keys(self):
         def reject_duplicates(pairs):
             result = {}

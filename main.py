@@ -150,8 +150,11 @@ def _list(value):
 
 def _error(message, action=None):
     return {
+        "record_type": "error",
         "error": message,
         "allowed_actions": list(CANONICAL_ACTIONS),
+        "_billing": {"billable_items": 0, "reason": "error"},
+        "_pushed_items": 0,
         "_meta": {
             "actor": "edgar-signals",
             "version": ACTOR_VERSION,
