@@ -9,7 +9,7 @@
 - CRM-friendly fields: `amount_raised_usd`, primary contact name/title, location, freshness, and filing lag.
 - Deeper Form D extraction: every related person, security types, federal exemptions, investor count, first-sale date, incorporation year, commissions, and finder fees.
 - Richer company snapshots with correct SIC code/description, addresses, filer category, EIN, former names, and precise filing links.
-- Interactive web documentation, OpenAPI specification, product logo, tests, and continuous integration.
+- Interactive web documentation, OpenAPI specification, product logo, deterministic tests, and live cloud acceptance coverage.
 
 ### Fixed
 - Enforce the requested result limit exactly; a limit of 10 can no longer return a full 12-row enrichment chunk.
@@ -19,6 +19,7 @@
 - Preserve the unit and taxonomy belonging to the selected SEC company fact.
 - Correct `sic`, which previously contained the SIC description instead of the numeric code.
 - Use exact SEC filing index URLs and include accession numbers in filing-search results.
+- Persist sanitized, explicitly zero-billable `OUTPUT` records when SEC upstream requests fail.
 
 ### Performance and cost
 - True concurrent enrichment with the network wait outside the throttle lock.

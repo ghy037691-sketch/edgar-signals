@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -169,6 +170,32 @@ class ActorContractTests(unittest.TestCase):
         self.assertEqual(result["_billing"]["billable_items"], 0)
         self.assertEqual(result["_pushed_items"], 0)
         self.assertEqual(result["_meta"]["action"], "snapshot")
+
+    def test_runtime_http_errors_are_sanitized_and_non_billable(self):
+        error = urllib.error.HTTPError(
+            "https://efts.sec.gov/private-query", 403, "Forbidden", {}, None,
+        )
+        result = main._runtime_failure(error, "funding_leads")
+        self.assertEqual(result["_billing"]["billable_items"], 0)
+        self.assertEqual(result["_pushed_items"], 0)
+        self.assertEqual(result["_meta"]["upstream_status"], 403)
+        self.assertFalse(result["_meta"]["retryable"])
+        self.assertNotIn("private-query", json.dumps(result))
+
+    @patch("builtins.print")
+    @patch.object(main, "save_output")
+    @patch.object(main, "run")
+    @patch.object(main, "read_input", return_value={"action": "funding_leads"})
+    def test_actor_main_persists_runtime_failure(self, _read, run, save, _print):
+        run.side_effect = urllib.error.HTTPError(
+            "https://efts.sec.gov/private-query", 403, "Forbidden", {}, None,
+        )
+        with self.assertRaises(SystemExit) as stopped:
+            main.main()
+        self.assertEqual(stopped.exception.code, 2)
+        saved = save.call_args.args[0]
+        self.assertEqual(saved["_billing"]["billable_items"], 0)
+        self.assertEqual(saved["_meta"]["upstream_status"], 403)
 
     def test_all_json_contracts_parse_without_duplicate_keys(self):
         def reject_duplicates(pairs):

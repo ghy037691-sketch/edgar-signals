@@ -166,6 +166,35 @@ def _error(message, action=None):
     }
 
 
+def _runtime_failure(error, action=None):
+    """Turn runtime/upstream exceptions into a sanitized, zero-billable Actor result."""
+    if isinstance(error, urllib.error.HTTPError):
+        status = int(error.code)
+        if status == 403:
+            message = (
+                "The SEC upstream service rejected this automated request. Retry later; "
+                "self-hosted clients must set SEC_EDGAR_USER_AGENT to a monitored contact."
+            )
+        elif status == 429:
+            message = "The SEC upstream rate limit was reached. Retry this run later."
+        else:
+            message = "The SEC upstream service did not complete this request. Retry later."
+        result = _error(message, action)
+        result["_meta"].update({
+            "error_type": "upstream_http",
+            "upstream_status": status,
+            "retryable": status == 429 or status >= 500,
+        })
+        return result
+    if isinstance(error, (urllib.error.URLError, TimeoutError)):
+        result = _error("The SEC upstream service is temporarily unreachable. Retry later.", action)
+        result["_meta"].update({"error_type": "upstream_network", "retryable": True})
+        return result
+    result = _error("The Actor could not complete this request. Retry or open a support issue.", action)
+    result["_meta"].update({"error_type": "unexpected", "retryable": True})
+    return result
+
+
 def run(inp):
     """Validate input, call the selected action, and attach provenance metadata."""
     if not isinstance(inp, dict):
@@ -290,8 +319,19 @@ def _dataset_items(result):
 
 
 def main():
-    inp = read_input()
-    result = run(inp)
+    inp = None
+    try:
+        inp = read_input()
+        result = run(inp)
+    except Exception as error:
+        raw_action = str((inp or {}).get("action") or "funding_leads").strip().lower()
+        action = ACTION_ALIASES.get(raw_action, raw_action)
+        result = _runtime_failure(error, action)
+        print(json.dumps({
+            "event": "actor_runtime_error",
+            "error_type": type(error).__name__,
+            "upstream_status": getattr(error, "code", None),
+        }), file=sys.stderr, flush=True)
 
     if result.get("error"):
         try:
@@ -305,7 +345,15 @@ def main():
         result["_pushed_items"] = push_to_dataset(items)
         save_output(result)
     except Exception as error:
-        failure = _error(f"Could not persist Actor output: {error}", result.get("_meta", {}).get("action"))
+        failure = _error(
+            "Could not persist the Actor output. Retry later or open a support issue.",
+            result.get("_meta", {}).get("action"),
+        )
+        failure["_meta"].update({"error_type": "persistence", "retryable": True})
+        print(json.dumps({
+            "event": "actor_persistence_error",
+            "error_type": type(error).__name__,
+        }), file=sys.stderr, flush=True)
         try:
             save_output(failure)
         finally:
