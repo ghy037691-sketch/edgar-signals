@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.0 — Fully furnished release (2026-09-09)
+## 1.0.1 — Production hardening (2026-09-09)
+
+### Fixed
+- Persist a sanitized, explicitly zero-billable `OUTPUT` record when an uncaught Actor runtime or SEC upstream failure occurs.
+- Bound free-text and list inputs before constructing SEC requests, and safely reject non-finite amount filters.
+
+### Operations
+- Build Actor version `1.0` directly from the public GitHub repository.
+- Automatically trigger tagged Apify builds on every `main` push through a private GitHub webhook; Render continues to auto-deploy the same commit.
+- Re-accepted the Git-sourced production image with an exact 10-row, CRM-ready funding-lead run.
+
+## 1.0.0 — Fully furnished release (2026-09-09)
 
 ### Added
 - Required Actor output schema and four curated dataset views for Apify Console and AI agents.
@@ -19,8 +30,6 @@
 - Preserve the unit and taxonomy belonging to the selected SEC company fact.
 - Correct `sic`, which previously contained the SIC description instead of the numeric code.
 - Use exact SEC filing index URLs and include accession numbers in filing-search results.
-- Persist sanitized, explicitly zero-billable `OUTPUT` records when SEC upstream requests fail.
-- Bound free-text/list inputs and reject non-finite amount filters before constructing SEC requests.
 
 ### Performance and cost
 - True concurrent enrichment with the network wait outside the throttle lock.
