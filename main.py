@@ -213,8 +213,9 @@ def run(inp):
         )
 
     if result.get("error"):
-        result["_meta"] = _error(result["error"], action)["_meta"]
-        return result
+        # Normalize both validation errors and core/upstream errors to one explicit,
+        # non-billable contract. Never let an ad-hoc core error omit billing state.
+        return _error(str(result["error"]), action)
     result["_meta"] = {
         "actor": "edgar-signals",
         "version": ACTOR_VERSION,

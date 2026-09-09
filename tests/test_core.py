@@ -161,6 +161,15 @@ class ActorContractTests(unittest.TestCase):
         self.assertEqual(result["_pushed_items"], 0)
         self.assertEqual(result["_meta"]["status"], "failed")
 
+    @patch.object(main.edgar, "company_snapshot")
+    def test_core_errors_are_normalized_to_non_billable_contract(self, snapshot):
+        snapshot.return_value = {"error": "not found"}
+        result = main.run({"action": "snapshot", "symbol": "NOPE"})
+        self.assertEqual(result["record_type"], "error")
+        self.assertEqual(result["_billing"]["billable_items"], 0)
+        self.assertEqual(result["_pushed_items"], 0)
+        self.assertEqual(result["_meta"]["action"], "snapshot")
+
     def test_all_json_contracts_parse_without_duplicate_keys(self):
         def reject_duplicates(pairs):
             result = {}
