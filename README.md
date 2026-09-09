@@ -159,10 +159,10 @@ The demo may cold-start because it runs on free hosting. Production automation s
 
 Launch pricing uses **pay per event**:
 
-- `apify-default-dataset-item`: **$0.01 per delivered dataset row**;
-- `apify-actor-start`: the small standard start event shown in Apify's Pricing tab.
+- `apify-default-dataset-item`: **$0.005 per delivered dataset row**;
+- `apify-actor-start`: the standard **$0.00005** start event.
 
-That means 100 qualified funding leads cost about **$1**, and 1,000 cost **$10**. Filtering happens before rows are written, so rejected funds, SPVs, duplicates, and missing-contact records are not charged as results. An error or a funding run with zero matches writes **zero dataset items**. Snapshot, insider, and filing-search runs write one item each.
+That means 100 qualified funding leads cost about **$0.50**, and 1,000 cost **$5**. Filtering happens before rows are written, so rejected funds, SPVs, duplicates, and missing-contact records are not charged as results. An error or a funding run with zero matches writes **zero dataset items**. Snapshot, insider, and filing-search runs write one item each.
 
 Always use the **maximum cost per run** control in Apify if you need a hard spending ceiling. Current pricing displayed in the Store is authoritative if it differs from this README.
 
